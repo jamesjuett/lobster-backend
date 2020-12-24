@@ -1,7 +1,7 @@
 CREATE TABLE users(
     user_id INTEGER GENERATED ALWAYS AS IDENTITY,
     email VARCHAR(50) NOT NULL,
-    fullname VARCHAR(100),
+    full_name VARCHAR(100),
     is_super BOOLEAN DEFAULT false,
     PRIMARY KEY(user_id)
 );
@@ -9,8 +9,8 @@ CREATE TABLE users(
 CREATE TABLE courses(
     course_id INTEGER GENERATED ALWAYS AS IDENTITY,
     short_name VARCHAR(20) NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    semester VARCHAR(6) NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    term VARCHAR(6) NOT NULL,
     year SMALLINT NOT NULL,
     PRIMARY KEY(course_id)
 );
@@ -18,7 +18,7 @@ CREATE TABLE courses(
 CREATE TABLE users_courses(
     user_id INTEGER NOT NULL,
     course_id INTEGER NOT NULL,
-    role SMALLINT NOT NULL,
+    is_admin BOOLEAN NOT NULL,
     PRIMARY KEY(user_id, course_id),
     FOREIGN KEY (user_id)
         REFERENCES users(user_id),
