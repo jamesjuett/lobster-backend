@@ -1,6 +1,5 @@
 import * as Knex from "knex";
 
-
 export async function up(knex: Knex): Promise<void> {
   return knex.schema
     .createTable("users", table => {
@@ -21,7 +20,7 @@ export async function up(knex: Knex): Promise<void> {
         .references("id").inTable("users");
       table.integer("course_id").unsigned().notNullable()
         .references("id").inTable("courses");
-      table.boolean("is_admin").notNullable();
+      table.boolean("is_admin").notNullable().defaultTo(false);
       table.primary(["user_id", "course_id"]);
     })
     .createTable("exercises", table => {
@@ -33,7 +32,7 @@ export async function up(knex: Knex): Promise<void> {
       table.integer("exercise_id").unsigned().nullable()
         .references("id").inTable("exercises");
       table.timestamp("last_modified").notNullable().defaultTo(knex.fn.now());
-      table.jsonb("contents").notNullable();
+      table.text("contents").notNullable();
     })
     .alterTable("exercises", table => {
       table.integer("starter_project_id").unsigned().notNullable()
