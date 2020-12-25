@@ -1,7 +1,7 @@
 import {Router, NextFunction } from "express";
 import { ValidationChain } from "express-validator";
 import {db} from "../db/db"
-import { jsonBodyParser, validateBody } from "../middleware/common";
+import { requireAllValid, jsonBodyParser, validateBody } from "../middleware/common";
 
 function validateShortName(chain: ValidationChain) {
   return chain.trim().isLength({min: 1, max: 20});
@@ -22,13 +22,15 @@ courses_router
   )
   .post("/",
     jsonBodyParser,
+    validateBody("id").not().exists(),
     validateShortName(validateBody("short_name")),
     validateFullName(validateBody("full_name")),
     validateTerm(validateBody("term")),
     validateBody("year").isInt(),
+    requireAllValid,
     async (req, res) => {
       await db("courses").insert(req.body);
-      res.sendStatus(200);
+      res.sendStatus(201);
     }
   )
 

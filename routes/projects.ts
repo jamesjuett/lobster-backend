@@ -1,7 +1,7 @@
 import {Router, NextFunction } from "express";
 import {db} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
-import { assertValidation } from "../middleware/common";
+import { requireAllValid } from "../middleware/common";
 
 async function getProjectById(projectId: number) {
   let result = await db("projects").where({id: projectId}).select();
@@ -26,7 +26,7 @@ projects_router
   .route("/:projectId")
     .get(
       validateParam("projectId").isInt(),
-      assertValidation,
+      requireAllValid,
       // TODO auth check
       // (req,res,next) => requireProjectOwner(parseInt(req.params.projectId), next),
       async (req,res) => {
