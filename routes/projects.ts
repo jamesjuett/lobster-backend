@@ -23,14 +23,14 @@ projects_router
   // .get("/", async function (req, res) {
   //   res.json(await db("projects").select());
   // })
-  .route("/:projectId")
+  .route("/:id")
     .get(
-      validateParam("projectId").isInt(),
+      validateParam("id").isInt(),
       requireAllValid,
       // TODO auth check
-      // (req,res,next) => requireProjectOwner(parseInt(req.params.projectId), next),
+      // (req,res,next) => requireProjectOwner(parseInt(req.params["id"]), next),
       async (req,res) => {
-        res.json(await getProjectById(parseInt(req.params.projectId)))
+        res.json(await getProjectById(parseInt(req.params["id"])))
       }
     )
 

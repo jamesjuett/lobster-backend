@@ -65,8 +65,7 @@
             "readOnly" : true
           },
           "exercise_id" : {
-            "type" : "integer",
-            "nullable" : true
+            "type" : "integer"
           },
           "last_modified" : {
             "type" : "string",
@@ -149,12 +148,12 @@
         }
       }
     },
-    "/courses/{name}/{semester}/{year}/" : {
+    "/courses/{short_name}/{semester}/{year}/" : {
       "get" : {
         "tags" : [ "Courses" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "name",
+          "name" : "short_name",
           "schema" : {
             "type" : "string"
           },
@@ -228,20 +227,9 @@
           "description" : "Course Post Object",
           "required" : false,
           "content" : {
-            "multipart/form-data" : {
+            "application/json" : {
               "schema" : {
-                "type" : "object",
-                "properties" : {
-                  "name" : {
-                    "type" : "string"
-                  },
-                  "semester" : {
-                    "type" : "string"
-                  },
-                  "year" : {
-                    "type" : "integer"
-                  }
-                }
+                "$ref" : "#/components/schemas/Course"
               }
             }
           }

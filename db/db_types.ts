@@ -37,7 +37,7 @@ declare module "knex/types/tables" {
     contents: string;
   }
   
-  type ExceptID<T> = Knex.CompositeTableType<T, Omit<T, "id">, Partial<Omit<T, "id">>>;
+  type ExceptID<T> = Knex.CompositeTableType<T, Omit<T, "id"> & {id?: undefined}, Partial<Omit<T, "id">> & {id?: undefined}>;
 
   interface Tables {
     users: Knex.CompositeTableType<
@@ -47,7 +47,7 @@ declare module "knex/types/tables" {
       //   Required: email, name
       //   Optional: is_super
       //   (Not allowed): id
-      Pick<DB_Users, "email" | "name"> & Partial<Pick<DB_Users, "is_super">>,
+      Pick<DB_Users, "email" | "name"> & Partial<Pick<DB_Users, "is_super">> & {id?: undefined},
       // Update Type
       //   All optional except id may not be updated
       Partial<Omit<DB_Users, "id">>
@@ -76,7 +76,7 @@ declare module "knex/types/tables" {
     //   Required: contents
     //   Optional: exercise_id
     //   (Not allowed): id, last_modified
-    Pick<DB_Projects, "contents"> & Partial<Pick<DB_Projects, "exercise_id">>,
+    Pick<DB_Projects, "contents"> & Partial<Pick<DB_Projects, "exercise_id">> & {id?: undefined} & {last_modified?: undefined},
     // Update Type
     //   All optional except id and last_modified may not be updated
     Partial<Omit<DB_Projects, "id" | "last_modified">>
