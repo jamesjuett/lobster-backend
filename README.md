@@ -1,6 +1,10 @@
 # lobster-backend
 
-## Knex
+## Database
+
+### Knex
+
+DO NOT use `.raw()` with a query manually constructed as a string (e.g. you might accidentally do something that opens up the possibility of SQL injection). Use the Knex query builder functions like `.select()`, `.where()`, etc.
 
 ### Migrations
 
