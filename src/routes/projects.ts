@@ -55,8 +55,8 @@ projects_router
       async (req,res) => {
         let project = await getProjectById(parseInt(req.params["id"]));
         if (project) {
-          res.json(project);
           res.status(200);
+          res.json(project);
         }
         else {
           res.sendStatus(404);
@@ -111,8 +111,8 @@ projects_router
           .returning("*").first();
 
         if (copy) {
+          res.status(201);
           res.json(copy);
-          res.sendStatus(201);
         }
         else {
           res.sendStatus(500);

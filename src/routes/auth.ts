@@ -34,15 +34,14 @@ passport.use(new GoogleStrategy(
 
 export const auth_router = Router();
 auth_router
+  .use(passport.initialize())
   .get("/google",
     passport.authenticate("google", { session: false, scope: ["openid", "email"] })
   )
   .get("/google/callback",
     passport.authenticate("google", { session: false }),
     (req, res) => {
-      console.log("setting token cookie");
-      console.log(req.user);
-      res.cookie("token", generateJwt((req.user as any).id));
+      res.cookie("bearer", generateJwt((req.user as any).id));
       res.redirect("/");
     }
   )

@@ -32,9 +32,10 @@ declare module "knex/types/tables" {
 
   interface DB_Projects {
     id: number;
-    exercise_id?: number;
+    exercise_id?: number | null;
     last_modified: string; // date
     contents: string;
+    is_public: boolean;
   }
   
   type ExceptID<T> = Knex.CompositeTableType<T, Omit<T, "id"> & {id?: undefined}, Partial<Omit<T, "id">> & {id?: undefined}>;
@@ -70,17 +71,17 @@ declare module "knex/types/tables" {
     exercises: ExceptID<DB_Exercises>;
 
     projects: Knex.CompositeTableType<
-    // Base Type
-    DB_Projects,
-    // Insert Type
-    //   Required: contents
-    //   Optional: exercise_id
-    //   (Not allowed): id, last_modified
-    Pick<DB_Projects, "contents"> & Partial<Pick<DB_Projects, "exercise_id">> & {id?: undefined} & {last_modified?: undefined},
-    // Update Type
-    //   All optional except id and last_modified may not be updated
-    Partial<Omit<DB_Projects, "id" | "last_modified">> & {id?: undefined} & {last_modified?: undefined}
-    >;
+      // Base Type
+      DB_Projects,
+      // Insert Type
+      //   Required: contents
+      //   Optional: exercise_id, is_public (default false)
+      //   (Not allowed): id, last_modified
+      Pick<DB_Projects, "contents"> & Partial<Pick<DB_Projects, "exercise_id" | "is_public">> & {id?: undefined} & {last_modified?: undefined},
+      // Update Type
+      //   All optional except id and last_modified may not be updated
+      Partial<Omit<DB_Projects, "id" | "last_modified">> & {id?: undefined} & {last_modified?: undefined}
+      >;
   }
 }
 

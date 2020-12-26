@@ -95,6 +95,134 @@
     }
   },
   "paths" : {
+    "/public/projects/{project_id}/" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "project_id",
+          "schema" : {
+            "type" : "integer"
+          },
+          "required" : true
+        } ],
+        "summary" : "Gets details on a project on lobster",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "NOT FOUND"
+          }
+        }
+      }
+    },
+    "/public/courses/" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "summary" : "Gets a list of courses on lobster",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "courses" : {
+                      "type" : "array",
+                      "items" : {
+                        "$ref" : "#/components/schemas/Course"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/courses/{course_id}/" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "course_id",
+          "schema" : {
+            "type" : "integer"
+          },
+          "required" : true
+        } ],
+        "summary" : "Gets details of a course",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Course"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "NOT FOUND"
+          }
+        }
+      }
+    },
+    "/public/courses/{short_name}/{term}/{year}" : {
+      "get" : {
+        "tags" : [ "Public" ],
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "short_name",
+          "schema" : {
+            "type" : "string"
+          },
+          "required" : true
+        }, {
+          "in" : "path",
+          "name" : "term",
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "fall", "winter", "spring", "summer" ]
+          },
+          "required" : true
+        }, {
+          "in" : "path",
+          "name" : "year",
+          "schema" : {
+            "type" : "integer"
+          },
+          "required" : true
+        } ],
+        "summary" : "Gets details of a course",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Course"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "NOT FOUND"
+          }
+        }
+      }
+    },
     "/courses/" : {
       "get" : {
         "tags" : [ "Courses" ],
@@ -148,7 +276,7 @@
         }
       }
     },
-    "/courses/{short_name}/{semester}/{year}/" : {
+    "/courses/{short_name}/{term}/{year}/" : {
       "get" : {
         "tags" : [ "Courses" ],
         "parameters" : [ {
@@ -160,9 +288,10 @@
           "required" : true
         }, {
           "in" : "path",
-          "name" : "semester",
+          "name" : "term",
           "schema" : {
-            "type" : "string"
+            "type" : "string",
+            "enum" : [ "fall", "winter", "spring", "summer" ]
           },
           "required" : true
         }, {
@@ -188,12 +317,12 @@
         }
       }
     },
-    "/courses/{courseid}/" : {
+    "/courses/{course_id}/" : {
       "get" : {
         "tags" : [ "Courses" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -217,7 +346,7 @@
         "tags" : [ "Courses" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -252,7 +381,7 @@
         "tags" : [ "Courses" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -266,12 +395,12 @@
         }
       }
     },
-    "/courses/{courseid}/copy/" : {
+    "/courses/{course_id}/copy/" : {
       "post" : {
         "tags" : [ "Courses" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -315,7 +444,7 @@
                       }
                     }
                   },
-                  "courseid" : {
+                  "course_id" : {
                     "type" : "integer"
                   },
                   "name" : {
@@ -340,12 +469,12 @@
         }
       }
     },
-    "/courses/{courseid}/exercises/" : {
+    "/courses/{course_id}/exercises/" : {
       "get" : {
         "tags" : [ "Exercises" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -374,12 +503,12 @@
         }
       }
     },
-    "/exercises/{exerciseid}/" : {
+    "/exercises/{exercise_id}/" : {
       "get" : {
         "tags" : [ "Exercises" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "exerciseid",
+          "name" : "exercise_id",
           "schema" : {
             "type" : "integer"
           },
@@ -403,7 +532,7 @@
         "tags" : [ "Exercises" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "exerciseid",
+          "name" : "exercise_id",
           "schema" : {
             "type" : "integer"
           },
@@ -417,12 +546,12 @@
         }
       }
     },
-    "/exercises/{exerciseid}/starter_project/" : {
+    "/exercises/{exercise_id}/starter_project/" : {
       "get" : {
         "tags" : [ "Exercises" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "exerciseid",
+          "name" : "exercise_id",
           "schema" : {
             "type" : "integer"
           },
@@ -443,12 +572,41 @@
         }
       }
     },
-    "/projects/{projectid}/" : {
+    "/projects/" : {
+      "post" : {
+        "tags" : [ "Projects" ],
+        "summary" : "Creates a new project",
+        "requestBody" : {
+          "description" : "Project data",
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/Project"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "201" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Project"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{project_id}/" : {
       "get" : {
         "tags" : [ "Projects" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "projectid",
+          "name" : "project_id",
           "schema" : {
             "type" : "integer"
           },
@@ -472,7 +630,7 @@
         "tags" : [ "Projects" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "projectid",
+          "name" : "project_id",
           "schema" : {
             "type" : "integer"
           },
@@ -484,113 +642,42 @@
             "description" : "OK"
           }
         }
-      }
-    },
-    "/projects/{projectid}/files/" : {
-      "get" : {
-        "tags" : [ "Projects" ],
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "projectid",
-          "schema" : {
-            "type" : "integer"
-          },
-          "required" : true
-        } ],
-        "summary" : "Gets starter_files for an exercise on lobster",
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object",
-                  "properties" : {
-                    "files" : {
-                      "type" : "array",
-                      "items" : {
-                        "type" : "string"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/projects/{projectid}/status/" : {
-      "get" : {
-        "tags" : [ "Projects" ],
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "projectid",
-          "schema" : {
-            "type" : "integer"
-          },
-          "required" : true
-        } ],
-        "summary" : "Gets the status on a current project",
-        "responses" : {
-          "200" : {
-            "description" : "OK",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
-          }
-        }
       },
       "patch" : {
         "tags" : [ "Projects" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "projectid",
+          "name" : "project_id",
           "schema" : {
             "type" : "integer"
           },
           "required" : true
         } ],
-        "summary" : "Updates the status on a current project",
+        "summary" : "Modifies a project on lobster",
         "requestBody" : {
+          "description" : "Project data",
           "required" : true,
           "content" : {
-            "multipart/form-data" : {
+            "application/json" : {
               "schema" : {
-                "type" : "object",
-                "properties" : {
-                  "status" : {
-                    "type" : "object"
-                  }
-                }
+                "$ref" : "#/components/schemas/Project"
               }
             }
           }
         },
         "responses" : {
-          "201" : {
-            "description" : "OK",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "type" : "object"
-                }
-              }
-            }
+          "204" : {
+            "description" : "OK"
           }
         }
       }
     },
-    "/exercises/{exerciseid}/starter_files/" : {
+    "/exercises/{exercise_id}/starter_files/" : {
       "get" : {
         "tags" : [ "Exercises" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "exerciseid",
+          "name" : "exercise_id",
           "schema" : {
             "type" : "integer"
           },
@@ -622,7 +709,7 @@
         "tags" : [ "Exercises" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "exerciseid",
+          "name" : "exercise_id",
           "schema" : {
             "type" : "integer"
           },
@@ -670,7 +757,7 @@
         "tags" : [ "Exercises" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "exerciseid",
+          "name" : "exercise_id",
           "schema" : {
             "type" : "integer"
           },
@@ -718,12 +805,12 @@
         }
       }
     },
-    "/courses/{courseid}/admins/" : {
+    "/courses/{course_id}/admins/" : {
       "get" : {
         "tags" : [ "Permissions" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -755,7 +842,7 @@
         "tags" : [ "Permissions" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -805,7 +892,7 @@
         "tags" : [ "Permissions" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -852,12 +939,12 @@
         }
       }
     },
-    "/courses/{courseid}/staff/" : {
+    "/courses/{course_id}/staff/" : {
       "get" : {
         "tags" : [ "Permissions" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -889,7 +976,7 @@
         "tags" : [ "Permissions" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -939,7 +1026,7 @@
         "tags" : [ "Permissions" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -986,12 +1073,12 @@
         }
       }
     },
-    "/courses/{courseid}/students/" : {
+    "/courses/{course_id}/students/" : {
       "get" : {
         "tags" : [ "Permissions" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -1023,7 +1110,7 @@
         "tags" : [ "Permissions" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },
@@ -1073,7 +1160,7 @@
         "tags" : [ "Permissions" ],
         "parameters" : [ {
           "in" : "path",
-          "name" : "courseid",
+          "name" : "course_id",
           "schema" : {
             "type" : "integer"
           },

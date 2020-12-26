@@ -4,10 +4,10 @@ import swaggerUi from 'swagger-ui-express';
 
 import { projects_router } from './routes/projects';
 import { courses_router } from './routes/courses';
-import swaggerDocs from './docs/docs.json';
+import swaggerDocs from './docs/api-docs.json';
 import passport from 'passport';
-import { passport_jwt_middleware } from './auth/jwt_auth';
 import { auth_router } from './routes/auth';
+import { public_router } from './routes/public';
 
 const app = express();
 
@@ -15,19 +15,21 @@ app.get('/',
   (req,res) => res.send('Hi this is the Lobster REST API')
 );
 
-app.use(passport_jwt_middleware);
+// ALL requests to the regular api require authentication
+app.use('/api',
+  passport.initialize(),
+  passport.authenticate('jwt', { session: false })
+)
 
-app.get('/users/whoami',
-  // This request must be authenticated using a JWT, or else we will fail
-  passport.authenticate('jwt', { session: false }),
-  (req, res) => {
-    res.send('Secure response from ' + JSON.stringify(req.user));
-  }
-);
+// Regular API Routes
+app.use("/api/projects", projects_router);
+app.use("/api/courses", courses_router);
 
+// Public API routes do not require authentication
+app.use("/public", public_router);
 
-app.use("/projects", projects_router);
-app.use("/courses", courses_router);
+// Route to obtain authentication
+// (does not require prior authentication)
 app.use("/auth", auth_router);
 
 // Swagger API docs

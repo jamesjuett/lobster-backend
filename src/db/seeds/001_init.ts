@@ -3,12 +3,13 @@ import "../db_types"
 
 export async function seed(knex: Knex): Promise<void> {
   // Deletes ALL existing entries
+  await knex("users_courses").del();
   await knex("users").del();
   await knex("courses").del();
-  await knex("users_courses").del();
-  await knex("projects").del();
+  await knex("projects").update({ exercise_id: null });
   await knex("exercises").del();
-
+  await knex("projects").del();
+  
   // Inserts seed entries
   await knex("users").insert([
     { email: "jjuett@umich.edu", name: "James Juett", is_super: true },
@@ -33,8 +34,13 @@ export async function seed(knex: Knex): Promise<void> {
   ]);
 
   await knex("projects").insert([
-    { contents: '{"name": "Project 1", "files": [{"name": "program1.cpp", "code": "int main() {\n  int x = 1;\n  int y = x + x;\n}", "isTranslationUnit": true}]}' },
-    { contents: '{"name": "Project 2", "files": [{"name": "program2.cpp", "code": "int main() {\n  int x = 2;\n  int y = x + x;\n}", "isTranslationUnit": true}]}' },
+    {
+      contents: '{"name": "Project 1 (Public)", "files": [{"name": "program1.cpp", "code": "int main() {\n  int x = 1;\n  int y = x + x;\n}", "isTranslationUnit": true}]}',
+      is_public: true
+    },
+    {
+      contents: '{"name": "Project 2", "files": [{"name": "program2.cpp", "code": "int main() {\n  int x = 2;\n  int y = x + x;\n}", "isTranslationUnit": true}]}',
+    },
   ]);
   
   await knex("exercises").insert([

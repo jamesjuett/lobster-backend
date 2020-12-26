@@ -11,8 +11,6 @@ passport.use(new passportJwt.Strategy(
   }
 ));
 
-export const passport_jwt_middleware = passport.initialize();
-
 export function generateJwt(user_id: number) {
   return jsonwebtoken.sign(
     {}, // empty payload, all we need for now is user id as subject

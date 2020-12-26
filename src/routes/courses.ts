@@ -6,6 +6,11 @@ import { requireAllValid, jsonBodyParser, validateBody, validateParam } from "..
 
 const validateParamId = validateParam("id").isInt();
 
+const validateParamShortName = validateParam("short_name").trim().isLength({min: 1, max: 20});
+const validateParamTerm = validateParam("term").isIn(["fall", "winter", "spring", "summer"]);
+const validateParamYear = validateParam("year").isInt();
+
+
 const validateBodyShortName = validateBody("short_name").trim().isLength({min: 1, max: 20});
 const validateBodyFullName = validateBody("full_name").trim().isLength({min: 1, max: 100});
 const validateBodyTerm = validateBody("term").isIn(["fall", "winter", "spring", "summer"]);
@@ -18,17 +23,59 @@ const validateBodyCourse = [
   validateBodyYear
 ];
 
+export const getCourses = async (req: Request, res: Response) => {
+  res.status(200);
+  res.json(await db("courses").select());
+};
+
+export const getCourseByIdParam = [
+  validateParamId,
+  requireAllValid,
+  async (req: Request, res: Response) => {
+    let course = await getCourseById(parseInt(req.params["id"]));
+    if (course) {
+      res.status(200);
+      res.json(course);
+    }
+    else {
+      res.status(404);
+      res.send("This course does not exist.");
+    }
+  }
+];
+
+export const getCourseByShortNameTermYear = [
+  validateParamShortName,
+  validateParamTerm,
+  validateParamYear,
+  requireAllValid,
+  async (req: Request, res: Response) => {
+    let course = await db("courses")
+      .where({
+        short_name: req.params["short_name"],
+        term: req.params["term"],
+        year: parseInt(req.params["year"])
+      }).select().first();
+      
+    if (course) {
+      res.status(200);
+      res.json(course);
+    }
+    else {
+      res.status(404);
+      res.send("This course does not exist.");
+    }
+  }
+]
+
 async function getCourseById(id: number) {
-  return await db("projects").where({id: id}).select().first();
+  return await db("courses").where({id: id}).select().first();
 }
 
 export const courses_router = Router();
 courses_router
   .get("/",
-    async (req, res) => {
-      res.json(await db("courses").select());
-      res.status(200);
-    }
+    getCourses
   )
   .post("/",
     jsonBodyParser,
@@ -50,18 +97,7 @@ courses_router
 courses_router
   .route("/:id")
     .get(
-      validateParamId,
-      requireAllValid,
-      async (req, res) => {
-        let course = await getCourseById(parseInt(req.params["id"]));
-        if (course) {
-          res.json(course);
-          res.status(200);
-        }
-        else {
-          res.sendStatus(404);
-        }
-      }
+      getCourseByIdParam
     )
     .patch(
       jsonBodyParser,
@@ -113,8 +149,8 @@ courses_router
           .returning("*").first();
 
         if (copy) {
+          res.status(201);
           res.json(copy);
-          res.sendStatus(201);
         }
         else {
           res.sendStatus(500);
@@ -126,19 +162,6 @@ courses_router
 courses_router
   .route("/:short_name/:term/:year")
     .get(
-      validateBodyShortName,
-      validateBodyTerm,
-      validateBodyYear,
-      requireAllValid,
-      async (req, res) => {
-        let course = await getCourseById(parseInt(req.params["id"]));
-        if (course) {
-          res.json(course);
-          res.status(200);
-        }
-        else {
-          res.sendStatus(404);
-        }
-      }
+      getCourseByShortNameTermYear
     );
 
