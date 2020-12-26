@@ -1,8 +1,10 @@
 import {Router, Request, Response, NextFunction } from "express";
-import { body, ValidationChain } from "express-validator";
 import { DB_Courses } from "knex/types/tables";
 import {db} from "../db/db"
+import { withoutProps } from "../db/db_types";
 import { requireAllValid, jsonBodyParser, validateBody, validateParam } from "../middleware/common";
+
+const validateParamId = validateParam("id").isInt();
 
 const validateBodyShortName = validateBody("short_name").trim().isLength({min: 1, max: 20});
 const validateBodyFullName = validateBody("full_name").trim().isLength({min: 1, max: 100});
@@ -48,7 +50,7 @@ courses_router
 courses_router
   .route("/:id")
     .get(
-      validateParam("id").isInt(),
+      validateParamId,
       requireAllValid,
       async (req, res) => {
         let course = await getCourseById(parseInt(req.params["id"]));
@@ -63,7 +65,7 @@ courses_router
     )
     .patch(
       jsonBodyParser,
-      validateParam("id").isInt(),
+      validateParamId,
       validateBodyCourse.map(v => v.optional()),
       requireAllValid,
       async (req: Request, res: Response) => {
@@ -78,11 +80,11 @@ courses_router
             term: body.term,
             year: body.year !== undefined ? parseInt(body.year) : undefined,
           });
-        res.sendStatus(204);
+        res.sendStatus(204); // TODO send different status if not found
       }
     )
     .delete(
-      validateParam("id").isInt(),
+      validateParamId,
       requireAllValid,
       async (req, res) => {
         let id = parseInt(req.params["id"]);
@@ -93,11 +95,10 @@ courses_router
       }
     );
 
-    
 courses_router
   .route("/:id/copy")
     .post(
-      validateParam("id").isInt(),
+      validateParamId,
       requireAllValid,
       async (req, res) => {
         let id = parseInt(req.params["id"]);
@@ -107,9 +108,18 @@ courses_router
           return;
         }
         
-        let {id: ignore, ...copy} = orig;
-        await db("courses").insert(copy);
-        res.sendStatus(201);
+        let copy = await db("courses")
+          .insert(withoutProps(orig, "id"))
+          .returning("*").first();
+
+        if (copy) {
+          res.json(copy);
+          res.sendStatus(201);
+        }
+        else {
+          res.sendStatus(500);
+        }
+
       }
     );
 

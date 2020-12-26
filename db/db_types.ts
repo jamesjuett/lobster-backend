@@ -50,7 +50,7 @@ declare module "knex/types/tables" {
       Pick<DB_Users, "email" | "name"> & Partial<Pick<DB_Users, "is_super">> & {id?: undefined},
       // Update Type
       //   All optional except id may not be updated
-      Partial<Omit<DB_Users, "id">>
+      Partial<Omit<DB_Users, "id">> & {id?: undefined}
     >;
 
     courses: ExceptID<DB_Courses>;
@@ -79,7 +79,18 @@ declare module "knex/types/tables" {
     Pick<DB_Projects, "contents"> & Partial<Pick<DB_Projects, "exercise_id">> & {id?: undefined} & {last_modified?: undefined},
     // Update Type
     //   All optional except id and last_modified may not be updated
-    Partial<Omit<DB_Projects, "id" | "last_modified">>
+    Partial<Omit<DB_Projects, "id" | "last_modified">> & {id?: undefined} & {last_modified?: undefined}
     >;
   }
 }
+
+export function withoutProps<P extends string, T extends Record<P, any>>(obj: T, ...props: readonly P[]) : Omit<T, P> {
+  let copy : Omit<T, P> & Partial<Pick<T,P>> = Object.assign({}, obj);
+  props.forEach(p => delete copy[p]);
+  return copy;
+}
+
+// export function includingProps<T extends object, P extends object>(obj: T, props: P)
+//   : T extends Omit<infer R, keyof P> ? (R extends T & P ? R : T & P) : T & P {
+//   return Object.assign(obj, props) as any;
+// }

@@ -1,11 +1,19 @@
-import {Router, NextFunction } from "express";
+import {Request, Response, Router, NextFunction } from "express";
 import {db} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
-import { requireAllValid } from "../middleware/common";
+import { jsonBodyParser, requireAllValid } from "../middleware/common";
+import { withoutProps } from "../db/db_types";
+
+const validateParamId = validateParam("id").isInt();
+
+const validateBodyContents = validateBody("contents").trim().isLength({max: 100000});
+
+const validateBodyProject = [
+  validateBodyContents
+];
 
 async function getProjectById(projectId: number) {
-  let result = await db("projects").where({id: projectId}).select();
-  return result[0];
+  return await db("projects").where({id: projectId}).select().first();
 }
 
 async function requireProjectOwner(projectId: number, next: NextFunction) {
@@ -14,7 +22,6 @@ async function requireProjectOwner(projectId: number, next: NextFunction) {
   }
   else {
     throw new Error("test");
-    next("blsdfah");
   }
 }
 
@@ -23,14 +30,92 @@ projects_router
   // .get("/", async function (req, res) {
   //   res.json(await db("projects").select());
   // })
+  
+  .post("/",
+    jsonBodyParser,
+    validateBody("id").not().exists(),
+    validateBodyProject,
+    requireAllValid,
+    async (req: Request, res: Response) => {
+      let body : {[index:string]: string | undefined} = req.body;
+      await db("projects").insert({
+        contents: body.contents!
+      });
+      res.sendStatus(201);
+    }
+  );
+
+projects_router
   .route("/:id")
     .get(
-      validateParam("id").isInt(),
+      validateParamId,
       requireAllValid,
       // TODO auth check
       // (req,res,next) => requireProjectOwner(parseInt(req.params["id"]), next),
       async (req,res) => {
-        res.json(await getProjectById(parseInt(req.params["id"])))
+        let project = await getProjectById(parseInt(req.params["id"]));
+        if (project) {
+          res.json(project);
+          res.status(200);
+        }
+        else {
+          res.sendStatus(404);
+        }
       }
     )
+    .patch(
+      jsonBodyParser,
+      validateParamId,
+      validateBodyProject.map(v => v.optional()),
+      requireAllValid,
+      async (req: Request, res: Response) => {
+        let id = parseInt(req.params["id"]);
+        let body : {[index:string]: string | undefined} = req.body;
 
+        await db("projects")
+          .where({id: id})
+          .update({
+            contents: body.contents
+          });
+        res.sendStatus(204);
+      }
+    )
+    .delete(
+      validateParamId,
+      requireAllValid,
+      async (req, res) => {
+        let id = parseInt(req.params["id"]);
+        await db("projects")
+          .where({id: id})
+          .delete();
+        res.sendStatus(204);
+      }
+    );
+
+
+projects_router
+  .route("/:id/copy")
+    .post(
+      validateParamId,
+      requireAllValid,
+      async (req, res) => {
+        let id = parseInt(req.params["id"]);
+        let orig = await db("projects").where({id: id}).select().first();
+        if (!orig) {
+          res.sendStatus(404);
+          return;
+        }
+        
+        let copy = await db("projects")
+          .insert(withoutProps(orig, "id", "last_modified"))
+          .returning("*").first();
+
+        if (copy) {
+          res.json(copy);
+          res.sendStatus(201);
+        }
+        else {
+          res.sendStatus(500);
+        }
+      }
+    );
