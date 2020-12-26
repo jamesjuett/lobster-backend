@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc --project ./",
-    "start": "node ./build/server.js"
+    "start": "node ./build/server.js",
+    "migrate": "knex --knexfile src/knexfile.ts migrate:latest",
+    "seed": "knex --knexfile src/knexfile.ts seed:run"
   },
   "repository": {
     "type": "git",

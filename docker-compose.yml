@@ -1,0 +1,31 @@
+# docker-compose.yml
+
+version: "3.7"
+services:
+
+  lobster-backend:
+    build:
+      context: .
+    command: "wait-for-it db:5432 -- bash -c \"npm run migrate && pm2-runtime ./build/server.js\""
+    environment:
+      DB_SCHEMA: postgres
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: db
+    depends_on:
+      - db
+    ports:
+      - '3000:3000'
+
+  db:
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports: 
+      - '5432:5432'
+    volumes:
+      - ./lobster-db:/var/lib/postgresql/data
+        
+volumes:
+  lobster-db:
