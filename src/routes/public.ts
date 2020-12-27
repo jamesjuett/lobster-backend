@@ -1,7 +1,7 @@
 import {Request, Response, Router, NextFunction } from "express";
 import {db} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
-import { jsonBodyParser, requireAllValid } from "../middleware/common";
+import { jsonBodyParser, requireAllValid } from "./common";
 import { withoutProps } from "../db/db_types";
 import { getCourseByIdParam, getCourseByShortNameTermYear as getCourseByShortNameTermYearParams, getCourses } from "./courses";
 

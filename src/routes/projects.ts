@@ -1,7 +1,7 @@
-import {Request, Response, Router, NextFunction } from "express";
+import {Request, Response, Router, NextFunction, RequestHandler } from "express";
 import {db} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
-import { jsonBodyParser, requireAllValid } from "../middleware/common";
+import { createRoute, jsonBodyParser, NO_AUTHORIZATION, NO_PREPROCESSING, } from "./common";
 import { withoutProps } from "../db/db_types";
 
 const validateParamId = validateParam("id").isInt();
@@ -27,48 +27,56 @@ async function requireProjectOwner(projectId: number, next: NextFunction) {
 
 export const projects_router = Router();
 projects_router
-  // .get("/", async function (req, res) {
-  //   res.json(await db("projects").select());
-  // })
   
-  .post("/",
-    jsonBodyParser,
-    validateBody("id").not().exists(),
-    validateBodyProject,
-    requireAllValid,
-    async (req: Request, res: Response) => {
-      let body : {[index:string]: string | undefined} = req.body;
-      await db("projects").insert({
-        contents: body.contents!
-      });
-      res.sendStatus(201);
-    }
-  );
+  .post("/", createRoute({
+    authorization:
+      NO_AUTHORIZATION,
+    preprocessing:
+      jsonBodyParser,
+    validation:
+      [
+        validateBody("id").not().exists(),
+        ...validateBodyProject
+      ],
+    handler:
+      async (req: Request, res: Response) => {
+        let body : {[index:string]: string | undefined} = req.body;
+        await db("projects").insert({
+          contents: body.contents!
+        });
+        res.sendStatus(201);
+      }
+  }));
 
 projects_router
   .route("/:id")
-    .get(
-      validateParamId,
-      requireAllValid,
-      // TODO auth check
-      // (req,res,next) => requireProjectOwner(parseInt(req.params["id"]), next),
-      async (req,res) => {
-        let project = await getProjectById(parseInt(req.params["id"]));
-        if (project) {
-          res.status(200);
-          res.json(project);
+    .get(createRoute({
+      authorization:
+        NO_AUTHORIZATION, // TODO add authorization,
+      preprocessing:
+        NO_PREPROCESSING,
+      validation:
+        validateParamId,
+      handler:
+        async (req,res) => {
+          let project = await getProjectById(parseInt(req.params["id"]));
+          if (project) {
+            res.status(200);
+            res.json(project);
+          }
+          else {
+            res.sendStatus(404);
+          }
         }
-        else {
-          res.sendStatus(404);
-        }
-      }
-    )
-    .patch(
-      jsonBodyParser,
-      validateParamId,
-      validateBodyProject.map(v => v.optional()),
-      requireAllValid,
-      async (req: Request, res: Response) => {
+    }))
+    .patch(createRoute({
+      authorization: NO_AUTHORIZATION,
+      preprocessing: jsonBodyParser,
+      validation: [
+        validateParamId,
+        ...validateBodyProject.map(v => v.optional())
+      ],
+      handler: async (req: Request, res: Response) => {
         let id = parseInt(req.params["id"]);
         let body : {[index:string]: string | undefined} = req.body;
 
@@ -79,26 +87,28 @@ projects_router
           });
         res.sendStatus(204);
       }
-    )
-    .delete(
-      validateParamId,
-      requireAllValid,
-      async (req, res) => {
+    }))
+    .delete(createRoute({
+      authorization: NO_AUTHORIZATION,
+      preprocessing: NO_PREPROCESSING,
+      validation: validateParamId,
+      handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
         await db("projects")
           .where({id: id})
           .delete();
         res.sendStatus(204);
       }
-    );
+    }));
 
 
 projects_router
   .route("/:id/copy")
-    .post(
-      validateParamId,
-      requireAllValid,
-      async (req, res) => {
+    .post(createRoute({
+      authorization: NO_AUTHORIZATION,
+      preprocessing: NO_PREPROCESSING,
+      validation: validateParamId,
+      handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
         let orig = await db("projects").where({id: id}).select().first();
         if (!orig) {
@@ -118,4 +128,4 @@ projects_router
           res.sendStatus(500);
         }
       }
-    );
+    }));

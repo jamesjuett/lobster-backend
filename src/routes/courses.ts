@@ -2,7 +2,7 @@ import {Router, Request, Response, NextFunction } from "express";
 import { DB_Courses } from "knex/types/tables";
 import {db} from "../db/db"
 import { withoutProps } from "../db/db_types";
-import { requireAllValid, jsonBodyParser, validateBody, validateParam } from "../middleware/common";
+import { requireAllValid, jsonBodyParser, validateBody, validateParam } from "./common";
 
 const validateParamId = validateParam("id").isInt();
 
