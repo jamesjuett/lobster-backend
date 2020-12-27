@@ -223,7 +223,7 @@
         }
       }
     },
-    "/courses/" : {
+    "/api/courses/" : {
       "get" : {
         "tags" : [ "Courses" ],
         "summary" : "Gets a list of courses on lobster",
@@ -276,7 +276,7 @@
         }
       }
     },
-    "/courses/{short_name}/{term}/{year}/" : {
+    "/api/courses/{short_name}/{term}/{year}/" : {
       "get" : {
         "tags" : [ "Courses" ],
         "parameters" : [ {
@@ -317,7 +317,7 @@
         }
       }
     },
-    "/courses/{course_id}/" : {
+    "/api/courses/{course_id}/" : {
       "get" : {
         "tags" : [ "Courses" ],
         "parameters" : [ {
@@ -395,7 +395,7 @@
         }
       }
     },
-    "/courses/{course_id}/copy/" : {
+    "/api/courses/{course_id}/copy/" : {
       "post" : {
         "tags" : [ "Courses" ],
         "parameters" : [ {
@@ -421,7 +421,7 @@
         }
       }
     },
-    "/exercises/" : {
+    "/api/exercises/" : {
       "post" : {
         "tags" : [ "Exercises" ],
         "summary" : "Adds a course to lobster",
@@ -469,7 +469,7 @@
         }
       }
     },
-    "/courses/{course_id}/exercises/" : {
+    "/api/courses/{course_id}/exercises/" : {
       "get" : {
         "tags" : [ "Exercises" ],
         "parameters" : [ {
@@ -503,7 +503,7 @@
         }
       }
     },
-    "/exercises/{exercise_id}/" : {
+    "/api/exercises/{exercise_id}/" : {
       "get" : {
         "tags" : [ "Exercises" ],
         "parameters" : [ {
@@ -546,7 +546,7 @@
         }
       }
     },
-    "/exercises/{exercise_id}/starter_project/" : {
+    "/api/exercises/{exercise_id}/starter_project/" : {
       "get" : {
         "tags" : [ "Exercises" ],
         "parameters" : [ {
@@ -572,7 +572,7 @@
         }
       }
     },
-    "/projects/" : {
+    "/api/projects/" : {
       "post" : {
         "tags" : [ "Projects" ],
         "summary" : "Creates a new project",
@@ -601,7 +601,7 @@
         }
       }
     },
-    "/projects/{project_id}/" : {
+    "/api/projects/{project_id}/" : {
       "get" : {
         "tags" : [ "Projects" ],
         "parameters" : [ {
@@ -672,7 +672,7 @@
         }
       }
     },
-    "/exercises/{exercise_id}/starter_files/" : {
+    "/api/exercises/{exercise_id}/starter_files/" : {
       "get" : {
         "tags" : [ "Exercises" ],
         "parameters" : [ {
@@ -805,7 +805,7 @@
         }
       }
     },
-    "/courses/{course_id}/admins/" : {
+    "/api/courses/{course_id}/admins/" : {
       "get" : {
         "tags" : [ "Permissions" ],
         "parameters" : [ {
@@ -939,7 +939,7 @@
         }
       }
     },
-    "/courses/{course_id}/staff/" : {
+    "/api/courses/{course_id}/staff/" : {
       "get" : {
         "tags" : [ "Permissions" ],
         "parameters" : [ {
@@ -1073,7 +1073,7 @@
         }
       }
     },
-    "/courses/{course_id}/students/" : {
+    "/api/courses/{course_id}/students/" : {
       "get" : {
         "tags" : [ "Permissions" ],
         "parameters" : [ {
@@ -1207,7 +1207,7 @@
         }
       }
     },
-    "/users/{userid}/courses_is_admin_for/" : {
+    "/api/users/{userid}/courses_is_admin_for/" : {
       "get" : {
         "tags" : [ "Permissions" ],
         "parameters" : [ {
@@ -1241,7 +1241,7 @@
         }
       }
     },
-    "/users/{userid}/courses_is_staff_for/" : {
+    "/api/users/{userid}/courses_is_staff_for/" : {
       "get" : {
         "tags" : [ "Permissions" ],
         "parameters" : [ {
@@ -1275,7 +1275,7 @@
         }
       }
     },
-    "/users/{userid}/courses_is_student_for/" : {
+    "/api/users/{userid}/courses_is_student_for/" : {
       "get" : {
         "tags" : [ "Permissions" ],
         "parameters" : [ {
@@ -1309,7 +1309,7 @@
         }
       }
     },
-    "/users/{userid}/" : {
+    "/api/users/{userid}/" : {
       "get" : {
         "tags" : [ "Users" ],
         "parameters" : [ {
@@ -1335,7 +1335,7 @@
         }
       }
     },
-    "/users/whoami/" : {
+    "/api/users/whoami/" : {
       "get" : {
         "tags" : [ "Users" ],
         "summary" : "Gets information on the logged in user",

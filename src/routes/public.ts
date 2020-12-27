@@ -33,7 +33,6 @@ public_router
     validateParamId,
     requireAllValid,
     async (req,res) => {
-      console.log("hellloooo");
       let id = parseInt(req.params["id"]);
       let project = await db("projects")
         .where({
@@ -63,4 +62,30 @@ public_router
   )
   .get("/courses/:short_name/:term/:year",
     getCourseByShortNameTermYearParams
-  );
+  )
+  .post("/:id/copy",
+      validateParamId,
+      requireAllValid,
+      async (req, res) => {
+        let id = parseInt(req.params["id"]);
+        let orig = await db("courses").where({id: id}).select().first();
+        if (!orig) {
+          res.sendStatus(404);
+          return;
+        }
+        
+        let [copy] = await db("courses")
+          .insert(withoutProps(orig, "id"))
+          .returning("*");
+
+        if (copy) {
+          res.status(201);
+          res.json(copy);
+        }
+        else {
+          res.sendStatus(500);
+        }
+
+      }
+    );
+  

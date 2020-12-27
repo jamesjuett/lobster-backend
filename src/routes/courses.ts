@@ -144,9 +144,9 @@ courses_router
           return;
         }
         
-        let copy = await db("courses")
+        let [copy] = await db("courses")
           .insert(withoutProps(orig, "id"))
-          .returning("*").first();
+          .returning("*");
 
         if (copy) {
           res.status(201);

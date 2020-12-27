@@ -105,3 +105,6 @@ dist
 
 # lobster-backend
 build/
+secret/
+secrets/
+certs/

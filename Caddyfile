@@ -1,0 +1,8 @@
+{
+    auto_https off
+}
+
+localhost {
+    reverse_proxy lobster-backend:3000
+    tls /root/certs/localhost.pem /root/certs/localhost-key.pem
+}

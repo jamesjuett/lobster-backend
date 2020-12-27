@@ -11,26 +11,26 @@ export async function seed(knex: Knex): Promise<void> {
   await knex("projects").del();
   
   // Inserts seed entries
-  await knex("users").insert([
+  let user_ids = await knex("users").insert([
     { email: "jjuett@umich.edu", name: "James Juett", is_super: true },
     { email: "akamil@umich.edu", name: "Amir Kamil", is_super: true },
     { email: "jklooste@umich.edu", name: "John Kloosterman", is_super: true },
     { email: "lslavice@umich.edu", name: "Laura Alford", is_super: false },
-  ]);
+  ]).returning("id");
 
-  await knex("courses").insert([
+  let course_ids = await knex("courses").insert([
     { short_name: "eecs280", full_name: "Programming and Introductory Data Structures", term: "winter", year: 2021 },
     { short_name: "engr101", full_name: "Introduction to Computers and Programming", term: "winter", year: 2021 },
     { short_name: "eecs183", full_name: "Elementary Programming Concepts", term: "winter", year: 2021 },
-  ]);
+  ]).returning("id");
   
   await knex("users_courses").insert([
-    { user_id: 1, course_id: 1, is_admin: true },
-    { user_id: 1, course_id: 2, is_admin: true },
-    { user_id: 1, course_id: 3, is_admin: false },
-    { user_id: 2, course_id: 2, is_admin: true },
-    { user_id: 3, course_id: 2, is_admin: true },
-    { user_id: 4, course_id: 2, is_admin: true },
+    { user_id: user_ids[0], course_id: course_ids[0], is_admin: true },
+    { user_id: user_ids[0], course_id: course_ids[1], is_admin: true },
+    { user_id: user_ids[0], course_id: course_ids[2], is_admin: false },
+    { user_id: user_ids[1], course_id: course_ids[1], is_admin: true },
+    { user_id: user_ids[2], course_id: course_ids[1], is_admin: true },
+    { user_id: user_ids[3], course_id: course_ids[1], is_admin: true },
   ]);
 
   await knex("projects").insert([

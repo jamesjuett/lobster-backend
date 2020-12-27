@@ -24,3 +24,34 @@ Then, edit the `.ts` file to implement the migration. You might want to use a pr
 Be careful about using seeds. Running them will delete existing data in the database.
 
 Make sure to include the line `import "../db_types"` at the top of any new seed file (after it is auto-generated) so that you get typescript support.
+
+### Certificate Stuff
+
+```console
+sudo apt install libnss3-tools
+sudo apt install golang-go
+git clone https://github.com/FiloSottile/mkcert && cd mkcert
+go build -ldflags "-X main.Version=$(git describe --tags)"
+sudo cp mkcert /usr/local/bin/
+
+# Remove source, no longer needed
+cd..
+rm -r mkcert/
+
+# Create local CA
+mkcert -CAROOT
+sudo mkcert --install
+sudo mkcert localhost 127.0.0.1
+
+```
+
+**On windows**
+Use instructions in `mkcert` readme on github to install using chocolatey.
+Make sure to use administrator PowerShell.
+
+```console
+mkcert -install
+mkcert localhost
+```
+
+Then copy those files to `./secrets/certs`.

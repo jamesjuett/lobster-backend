@@ -16,6 +16,9 @@ services:
       - db
     ports:
       - '3000:3000'
+    networks:
+        - http
+        - db
 
   db:
     image: postgres
@@ -25,7 +28,26 @@ services:
     ports: 
       - '5432:5432'
     volumes:
-      - ./lobster-db:/var/lib/postgresql/data
+      - lobster-db:/var/lib/postgresql/data
+    networks:
+      - db
+
+  caddy:
+    image: caddy:2.1.1
+    restart: always
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./secrets/certs:/root/certs
+      - ./public:/public
+    networks:
+      - http
+    ports:
+      - "80:80"
+      - "443:443"
         
 volumes:
   lobster-db:
+
+networks:
+  http:
+  db:
