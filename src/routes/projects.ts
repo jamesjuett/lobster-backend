@@ -1,7 +1,7 @@
 import {Request, Response, Router, NextFunction, RequestHandler } from "express";
 import {db} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
-import { createRoute, jsonBodyParser, NO_AUTHORIZATION, NO_PREPROCESSING, } from "./common";
+import { createRoute, jsonBodyParser, NONE, } from "./common";
 import { withoutProps } from "../db/db_types";
 
 const validateParamId = validateParam("id").isInt();
@@ -30,7 +30,7 @@ projects_router
   
   .post("/", createRoute({
     authorization:
-      NO_AUTHORIZATION,
+      NONE,
     preprocessing:
       jsonBodyParser,
     validation:
@@ -52,9 +52,9 @@ projects_router
   .route("/:id")
     .get(createRoute({
       authorization:
-        NO_AUTHORIZATION, // TODO add authorization,
+        NONE, // TODO add authorization,
       preprocessing:
-        NO_PREPROCESSING,
+        NONE,
       validation:
         validateParamId,
       handler:
@@ -70,7 +70,7 @@ projects_router
         }
     }))
     .patch(createRoute({
-      authorization: NO_AUTHORIZATION,
+      authorization: NONE,
       preprocessing: jsonBodyParser,
       validation: [
         validateParamId,
@@ -89,8 +89,8 @@ projects_router
       }
     }))
     .delete(createRoute({
-      authorization: NO_AUTHORIZATION,
-      preprocessing: NO_PREPROCESSING,
+      authorization: NONE,
+      preprocessing: NONE,
       validation: validateParamId,
       handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
@@ -105,8 +105,8 @@ projects_router
 projects_router
   .route("/:id/copy")
     .post(createRoute({
-      authorization: NO_AUTHORIZATION,
-      preprocessing: NO_PREPROCESSING,
+      authorization: NONE,
+      preprocessing: NONE,
       validation: validateParamId,
       handler: async (req, res) => {
         let id = parseInt(req.params["id"]);

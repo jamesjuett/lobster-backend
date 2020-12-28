@@ -22,7 +22,7 @@ export interface CommonRouteHandlers {
   preprocessing: RequestHandler | readonly RequestHandler[];
   authorization: RequestHandler | readonly RequestHandler[];
   validation: ValidationChain | readonly ValidationChain[];
-  middleware: RequestHandler | readonly RequestHandler[];
+  handler: RequestHandler | readonly RequestHandler[];
 };
 
 export function createRoute(handlers: CommonRouteHandlers) {
@@ -32,13 +32,11 @@ export function createRoute(handlers: CommonRouteHandlers) {
     ...(Array.isArray(handlers.authorization) ? handlers.authorization : [handlers.authorization]),
     ...(Array.isArray(handlers.validation) ? handlers.validation : [handlers.validation]),
     requireAllValid,
-    ...(Array.isArray(handlers.middleware) ? handlers.middleware : [handlers.middleware]),
+    ...(Array.isArray(handlers.handler) ? handlers.handler : [handlers.handler]),
   ];
 }
 
-export const NO_PREPROCESSING = [] as readonly never[];
-export const NO_AUTHORIZATION = [] as readonly never[];
-export const NO_VALIDATION = [] as readonly never[];
+export const NONE = [] as readonly never[];
 
 // .post("/",
 // jsonBodyParser,

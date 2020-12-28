@@ -2,7 +2,7 @@ import {Router, Request, Response, NextFunction } from "express";
 import { DB_Courses } from "knex/types/tables";
 import {db} from "../db/db"
 import { withoutProps } from "../db/db_types";
-import { requireAllValid, jsonBodyParser, validateBody, validateParam } from "./common";
+import { requireAllValid, jsonBodyParser, validateBody, validateParam, createRoute, NONE } from "./common";
 
 const validateParamId = validateParam("id").isInt();
 
@@ -28,10 +28,15 @@ export const getCourses = async (req: Request, res: Response) => {
   res.json(await db("courses").select());
 };
 
-export const getCourseByIdParam = [
-  validateParamId,
-  requireAllValid,
-  async (req: Request, res: Response) => {
+async function getCourseById(id: number) {
+  return await db("courses").where({id: id}).select().first();
+}
+
+export const getCourseByIdParam = createRoute({
+  authorization: NONE,
+  preprocessing: NONE,
+  validation: validateParamId,
+  handler: async (req: Request, res: Response) => {
     let course = await getCourseById(parseInt(req.params["id"]));
     if (course) {
       res.status(200);
@@ -42,14 +47,17 @@ export const getCourseByIdParam = [
       res.send("This course does not exist.");
     }
   }
-];
+});
 
-export const getCourseByShortNameTermYear = [
-  validateParamShortName,
-  validateParamTerm,
-  validateParamYear,
-  requireAllValid,
-  async (req: Request, res: Response) => {
+export const getCourseByShortNameTermYear = createRoute({
+  authorization: NONE,
+  preprocessing: NONE,
+  validation: [
+    validateParamShortName,
+    validateParamTerm,
+    validateParamYear,
+  ],
+  handler: async (req: Request, res: Response) => {
     let course = await db("courses")
       .where({
         short_name: req.params["short_name"],
@@ -66,23 +74,24 @@ export const getCourseByShortNameTermYear = [
       res.send("This course does not exist.");
     }
   }
-]
-
-async function getCourseById(id: number) {
-  return await db("courses").where({id: id}).select().first();
-}
+});
 
 export const courses_router = Router();
 courses_router
-  .get("/",
-    getCourses
-  )
-  .post("/",
-    jsonBodyParser,
-    validateBody("id").not().exists(),
-    validateBodyCourse,
-    requireAllValid,
-    async (req: Request, res: Response) => {
+  .get("/", createRoute({
+    authorization: NONE,
+    preprocessing: NONE,
+    validation: NONE,
+    handler: getCourses
+  }))
+  .post("/", createRoute({
+    authorization: NONE,
+    preprocessing: jsonBodyParser,
+    validation: [
+      validateBody("id").not().exists(),
+      ...validateBodyCourse,
+    ],
+    handler: async (req: Request, res: Response) => {
       let body : {[index:string]: string | undefined} = req.body;
       await db("courses").insert({
         short_name: body.short_name!,
@@ -92,19 +101,24 @@ courses_router
       });
       res.sendStatus(201);
     }
-  );
+  }));
 
 courses_router
   .route("/:id")
-    .get(
-      getCourseByIdParam
-    )
-    .patch(
-      jsonBodyParser,
-      validateParamId,
-      validateBodyCourse.map(v => v.optional()),
-      requireAllValid,
-      async (req: Request, res: Response) => {
+    .get(createRoute({
+      authorization: NONE,
+      preprocessing: NONE,
+      validation: NONE,
+      handler: getCourseByIdParam
+    }))
+    .patch(createRoute({
+      authorization: NONE,
+      preprocessing: jsonBodyParser,
+      validation: [
+        validateParamId,
+        ...validateBodyCourse.map(v => v.optional())
+      ],
+      handler: async (req: Request, res: Response) => {
         let id = parseInt(req.params["id"]);
         let body : {[index:string]: string | undefined} = req.body;
 
@@ -118,25 +132,27 @@ courses_router
           });
         res.sendStatus(204); // TODO send different status if not found
       }
-    )
-    .delete(
-      validateParamId,
-      requireAllValid,
-      async (req, res) => {
+    }))
+    .delete(createRoute({
+      authorization: NONE,
+      preprocessing: NONE,
+      validation: validateParamId,
+      handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
         await db("courses")
           .where({id: id})
           .delete();
         res.sendStatus(204);
       }
-    );
+    }));
 
 courses_router
   .route("/:id/copy")
-    .post(
-      validateParamId,
-      requireAllValid,
-      async (req, res) => {
+    .post(createRoute({
+      authorization: NONE,
+      preprocessing: NONE,
+      validation: validateParamId,
+      handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
         let orig = await db("courses").where({id: id}).select().first();
         if (!orig) {
@@ -157,7 +173,7 @@ courses_router
         }
 
       }
-    );
+    }));
 
 courses_router
   .route("/:short_name/:term/:year")
