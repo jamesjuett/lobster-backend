@@ -8,6 +8,8 @@ import swaggerDocs from './docs/api-docs.json';
 import passport from 'passport';
 import { auth_router } from './routes/auth';
 import { public_router } from './routes/public';
+import { users_router } from './routes/users';
+import { assert } from 'console';
 
 const app = express();
 
@@ -22,6 +24,7 @@ app.use('/api',
 )
 
 // Regular API Routes
+app.use("/api/users", users_router);
 app.use("/api/projects", projects_router);
 app.use("/api/courses", courses_router);
 

@@ -8,7 +8,7 @@ export const auth_config = {
   google: {
     clientID: assertExists(process.env.GOOGLE_CLIENT_ID),
     clientSecret: assertExists(process.env.GOOGLE_CLIENT_SECRET),
-    callbackURL: "/auth/google/callback"
+    callbackURL: "https://localhost/auth/google/callback"
   },
   
   jwt: {

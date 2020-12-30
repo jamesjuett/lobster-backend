@@ -42,6 +42,7 @@ auth_router
     passport.authenticate("google", { session: false }),
     (req, res) => {
       res.cookie("bearer", generateJwt((req.user as any).id));
-      res.redirect("/");
+      res.redirect(302, "/");
+      // res.sendStatus(302);
     }
   )

@@ -10,7 +10,6 @@ const validateParamShortName = validateParam("short_name").trim().isLength({min:
 const validateParamTerm = validateParam("term").isIn(["fall", "winter", "spring", "summer"]);
 const validateParamYear = validateParam("year").isInt();
 
-
 const validateBodyShortName = validateBody("short_name").trim().isLength({min: 1, max: 20});
 const validateBodyFullName = validateBody("full_name").trim().isLength({min: 1, max: 100});
 const validateBodyTerm = validateBody("term").isIn(["fall", "winter", "spring", "summer"]);
