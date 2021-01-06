@@ -1,6 +1,6 @@
 import bodyParser from 'body-parser';
 import { NextFunction, Request, RequestHandler, Response } from 'express';
-import { ValidationChain, validationResult } from 'express-validator';
+import { param as validateParam, body as validateBody, ValidationChain, validationResult } from 'express-validator';
 
 // Body parsers
 export const jsonBodyParser = bodyParser.json();
@@ -52,3 +52,5 @@ export const NONE = [] as readonly never[];
 //   res.sendStatus(201);
 // }
 // );
+
+export const validateParamId = validateParam("id").isInt();

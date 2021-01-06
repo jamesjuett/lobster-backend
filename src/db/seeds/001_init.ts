@@ -33,7 +33,7 @@ export async function seed(knex: Knex): Promise<void> {
     { user_id: user_ids[3], course_id: course_ids[1], is_admin: true },
   ]);
 
-  await knex("projects").insert([
+  let project_ids = await knex("projects").insert([
     {
       contents: '{"name": "Project 1 (Public)", "files": [{"name": "program1.cpp", "code": "int main() {\n  int x = 1;\n  int y = x + x;\n}", "isTranslationUnit": true}]}',
       is_public: true
@@ -41,13 +41,18 @@ export async function seed(knex: Knex): Promise<void> {
     {
       contents: '{"name": "Project 2", "files": [{"name": "program2.cpp", "code": "int main() {\n  int x = 2;\n  int y = x + x;\n}", "isTranslationUnit": true}]}',
     },
-  ]);
+  ]).returning("id");
   
-  await knex("exercises").insert([
-    { name: "test exercise 1", starter_project_id: 1 },
-    { name: "test exercise 2", starter_project_id: 2 },
-  ]);
+  let exercise_ids = await knex("exercises").insert([
+    { name: "test exercise 1", starter_project_id: project_ids[0] },
+    { name: "test exercise 2", starter_project_id: project_ids[1] },
+  ]).returning("id");
   
-  await knex("projects").where({ id: 1 }).update({ exercise_id: 1 });
-  await knex("projects").where({ id: 2 }).update({ exercise_id: 2 });
+  await knex("projects").where({ id: project_ids[0] }).update({ exercise_id: exercise_ids[0] });
+  await knex("projects").where({ id: project_ids[1] }).update({ exercise_id: exercise_ids[1] });
+
+  await knex("users_projects").insert([
+    { user_id: user_ids[0], project_id: project_ids[0] },
+    { user_id: user_ids[0], project_id: project_ids[1] },
+  ]);
 };

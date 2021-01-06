@@ -2,9 +2,7 @@ import {Router, Request, Response, NextFunction } from "express";
 import { DB_Courses } from "knex/types/tables";
 import {db} from "../db/db"
 import { withoutProps } from "../db/db_types";
-import { requireAllValid, jsonBodyParser, validateBody, validateParam, createRoute, NONE } from "./common";
-
-const validateParamId = validateParam("id").isInt();
+import { requireAllValid, jsonBodyParser, validateBody, validateParam, createRoute, NONE, validateParamId } from "./common";
 
 const validateParamShortName = validateParam("short_name").trim().isLength({min: 1, max: 20});
 const validateParamTerm = validateParam("term").isIn(["fall", "winter", "spring", "summer"]);
@@ -104,12 +102,7 @@ courses_router
 
 courses_router
   .route("/:id")
-    .get(createRoute({
-      authorization: NONE,
-      preprocessing: NONE,
-      validation: NONE,
-      handler: getCourseByIdParam
-    }))
+    .get(getCourseByIdParam)
     .patch(createRoute({
       authorization: NONE,
       preprocessing: jsonBodyParser,

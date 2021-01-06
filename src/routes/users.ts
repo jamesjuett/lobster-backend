@@ -1,15 +1,16 @@
+import { assert } from "console";
 import { Router, Request, Response } from "express";
 import { getJwtUserInfo } from "../auth/jwt_auth";
 import { db } from "../db/db";
-import { createRoute, NONE } from "./common";
+import { createRoute, NONE, validateParamId } from "./common";
 
 async function getUserById(id: number) {
-  return await db("users").where({id: id}).select().first();
+  return await db("users").where({ id: id }).select().first();
 }
 
 export const users_router = Router();
-users_router
-  .get("/me", createRoute({
+users_router.route("/me")
+  .get(createRoute({
     authorization: NONE,
     preprocessing: NONE,
     validation: NONE,
@@ -26,3 +27,37 @@ users_router
       }
     }
   }));
+
+users_router.route("/me/projects")
+  .get(createRoute({
+    authorization: NONE,
+    preprocessing: NONE,
+    validation: NONE,
+    handler: async (req: Request, res: Response) => {
+      let userInfo = getJwtUserInfo(req);
+      let projects = await getUserProjectsById(userInfo.id);
+      assert(projects);
+      res.status(200).json(projects);
+    }
+  }));
+
+users_router.route("/:id/projects")
+  .get(createRoute({
+    authorization: NONE,
+    preprocessing: NONE,
+    validation: validateParamId,
+    handler: async (req: Request, res: Response) => {
+      let projects = await getUserProjectsById(parseInt(req.params["id"]));
+      assert(projects);
+      res.status(200).json(projects);
+    }
+  }));
+
+
+
+
+async function getUserProjectsById(id: number) {
+  return await db("projects")
+    .join("users_projects", "projects.id", "users_projects.project_id")
+    .select("projects.*").where({user_id: id});
+}

@@ -19,6 +19,8 @@ To begin creating a new migration, first auto-generate a migration `.ts` file us
 
 Then, edit the `.ts` file to implement the migration. You might want to use a previous migration as a template.
 
+You'll also want to check out `db/db_types.ts` and make changes there to reflect your migration.
+
 ### Seeds
 
 Be careful about using seeds. Running them will delete existing data in the database.

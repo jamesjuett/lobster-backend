@@ -1335,7 +1335,36 @@
         }
       }
     },
-    "/api/users/whoami/" : {
+    "/api/users/{user_id}/projects" : {
+      "get" : {
+        "tags" : [ "Users" ],
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "schema" : {
+            "type" : "integer"
+          },
+          "required" : true
+        } ],
+        "summary" : "Gets an array of this user's projects",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Project"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/" : {
       "get" : {
         "tags" : [ "Users" ],
         "summary" : "Gets information on the logged in user",

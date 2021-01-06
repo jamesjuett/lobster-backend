@@ -37,6 +37,11 @@ declare module "knex/types/tables" {
     contents: string;
     is_public: boolean;
   }
+
+  interface DB_Users_Projects {
+    user_id: number;
+    project_id: number;
+  }
   
   type ExceptID<T> = Knex.CompositeTableType<T, Omit<T, "id"> & {id?: undefined}, Partial<Omit<T, "id">> & {id?: undefined}>;
 
@@ -81,6 +86,17 @@ declare module "knex/types/tables" {
       // Update Type
       //   All optional except id and last_modified may not be updated
       Partial<Omit<DB_Projects, "id" | "last_modified">> & {id?: undefined} & {last_modified?: undefined}
+      >;
+
+      users_projects: Knex.CompositeTableType<
+        // Base Type
+        DB_Users_Projects,
+        // Insert Type
+        //   Required: user_id, project_id
+        Pick<DB_Users_Projects, "user_id" | "project_id">,
+        // Update Type
+        //   Doesn't make sense to update (you should be using insert/delete)
+        never
       >;
   }
 }

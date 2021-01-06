@@ -35,7 +35,7 @@
     <link rel="stylesheet" href="css/exercises.css">
 
     <!-- Main Script -->
-    <script src = "js/exercises.bundle.js"></script>
+    <script src = "js/main.js"></script>
 
 </head>
 
@@ -46,7 +46,7 @@
     <div class="container-fluid">
         <h4 style="display: inline-block; vertical-align: middle; margin-left: 10px;">Lobster: A C++ Program Visualization Tool for Education</h4>
         <div style="display: inline-block; vertical-align: middle;">
-            <a class="btn btn-primary" href="auth/google">Sign In</a>
+            <a class="btn btn-primary lobster-sign-in-button" href="auth/google">Sign In</a>
         </div>
         <!--<h5 id="accountMessage" class="text-danger" style="float: right; margin-left: 5px; margin-right: 5px">Sign Out</h5>-->
     </div>
@@ -77,15 +77,4 @@ int main() {
 
 
 </body>
-<script type="text/javascript">
-    (async () => {
-        const response = await fetch("api/users/me", {
-            method: 'GET', // *GET, POST, PUT, DELETE, etc.
-            headers: {
-            'Authorization': 'bearer ' + Cookies.get('bearer')
-            }
-        });
-        console.log(await response.json());
-    })();
-</script>
 </html>
