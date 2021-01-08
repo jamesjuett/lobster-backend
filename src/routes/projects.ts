@@ -93,9 +93,6 @@ projects_router
       handler: async (req: Request, res: Response) => {
         let id = parseInt(req.params["id"]);
         let body : {[index:string]: string | undefined} = req.body;
-        console.log(req.body);
-        console.log(JSON.stringify(req.body));
-        console.log(body.contents);
 
         await db("projects")
           .where({id: id})
