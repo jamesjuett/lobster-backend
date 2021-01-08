@@ -3,12 +3,16 @@ import {db} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
 import { createRoute, jsonBodyParser, NONE, } from "./common";
 import { withoutProps } from "../db/db_types";
+import { getJwtUserInfo } from "../auth/jwt_auth";
 
 const validateParamId = validateParam("id").isInt();
 
+const validateBodyName = validateBody("name").trim().isLength({min: 1, max: 100});
 const validateBodyContents = validateBody("contents").trim().isLength({max: 100000});
 
 const validateBodyProject = [
+  validateBody("exercise_id").isInt().optional(),
+  validateBodyName,
   validateBodyContents
 ];
 
@@ -41,10 +45,21 @@ projects_router
     handler:
       async (req: Request, res: Response) => {
         let body : {[index:string]: string | undefined} = req.body;
-        await db("projects").insert({
+        
+        // Create and get a copy of the new project
+        let [newProject] = await db("projects").insert({
+          name: body.name!,
           contents: body.contents!
+        }).returning("*");
+
+        // Add current user as owner for project
+        let userInfo = getJwtUserInfo(req);
+        await db("users_projects").insert({
+          project_id: newProject!.id,
+          user_id: userInfo.id
         });
-        res.sendStatus(201);
+
+        res.status(201).json(newProject);
       }
   }));
 
@@ -61,8 +76,7 @@ projects_router
         async (req,res) => {
           let project = await getProjectById(parseInt(req.params["id"]));
           if (project) {
-            res.status(200);
-            res.json(project);
+            res.status(200).json(project);
           }
           else {
             res.sendStatus(404);
@@ -79,10 +93,14 @@ projects_router
       handler: async (req: Request, res: Response) => {
         let id = parseInt(req.params["id"]);
         let body : {[index:string]: string | undefined} = req.body;
+        console.log(req.body);
+        console.log(JSON.stringify(req.body));
+        console.log(body.contents);
 
         await db("projects")
           .where({id: id})
           .update({
+            name: body.name,
             contents: body.contents
           });
         res.sendStatus(204);

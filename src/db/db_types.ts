@@ -36,6 +36,7 @@ declare module "knex/types/tables" {
     last_modified: string; // date
     contents: string;
     is_public: boolean;
+    name: string;
   }
 
   interface DB_Users_Projects {
@@ -79,10 +80,10 @@ declare module "knex/types/tables" {
       // Base Type
       DB_Projects,
       // Insert Type
-      //   Required: contents
+      //   Required: contents, name
       //   Optional: exercise_id, is_public (default false)
       //   (Not allowed): id, last_modified
-      Pick<DB_Projects, "contents"> & Partial<Pick<DB_Projects, "exercise_id" | "is_public">> & {id?: undefined} & {last_modified?: undefined},
+      Pick<DB_Projects, "contents" | "name"> & Partial<Pick<DB_Projects, "exercise_id" | "is_public">> & {id?: undefined} & {last_modified?: undefined},
       // Update Type
       //   All optional except id and last_modified may not be updated
       Partial<Omit<DB_Projects, "id" | "last_modified">> & {id?: undefined} & {last_modified?: undefined}

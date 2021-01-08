@@ -35,11 +35,13 @@ export async function seed(knex: Knex): Promise<void> {
 
   let project_ids = await knex("projects").insert([
     {
-      contents: '{"name": "Project 1 (Public)", "files": [{"name": "program1.cpp", "code": "int main() {\n  int x = 1;\n  int y = x + x;\n}", "isTranslationUnit": true}]}',
+      name: "Project 1 (Public)",
+      contents: '{"name": "Project 1 (Public)", "files": [{"name": "program1.cpp", "code": "int main() {\\n  int x = 1;\\n  int y = x + x;\\n}", "isTranslationUnit": true}]}',
       is_public: true
     },
     {
-      contents: '{"name": "Project 2", "files": [{"name": "program2.cpp", "code": "int main() {\n  int x = 2;\n  int y = x + x;\n}", "isTranslationUnit": true}]}',
+      name: "Project 2",
+      contents: '{"name": "Project 2", "files": [{"name": "program2.cpp", "code": "int main() {\\n  int x = 2;\\n  int y = x + x;\\n}", "isTranslationUnit": true}]}',
     },
   ]).returning("id");
   
