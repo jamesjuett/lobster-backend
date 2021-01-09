@@ -10,6 +10,7 @@ import { auth_router } from './routes/auth';
 import { public_router } from './routes/public';
 import { users_router } from './routes/users';
 import { assert } from 'console';
+import { exercises_router } from './routes/exercises';
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api',
 app.use("/api/users", users_router);
 app.use("/api/projects", projects_router);
 app.use("/api/courses", courses_router);
+app.use("/api/exercises", exercises_router);
 
 // Public API routes do not require authentication
 app.use("/public", public_router);

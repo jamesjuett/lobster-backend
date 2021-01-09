@@ -1,11 +1,11 @@
 import {Request, Response, Router, NextFunction, RequestHandler } from "express";
 import {db} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
-import { createRoute, jsonBodyParser, NONE, } from "./common";
+import { createRoute, jsonBodyParser, NONE, validateParamId, } from "./common";
 import { withoutProps } from "../db/db_types";
 import { getJwtUserInfo } from "../auth/jwt_auth";
-
-const validateParamId = validateParam("id").isInt();
+import { getExerciseById } from "./exercises";
+import { DB_Projects } from "knex/types/tables";
 
 const validateBodyName = validateBody("name").trim().isLength({min: 1, max: 100});
 const validateBodyContents = validateBody("contents").trim().isLength({max: 100000});
@@ -18,6 +18,13 @@ const validateBodyProject = [
 
 async function getProjectById(projectId: number) {
   return await db("projects").where({id: projectId}).select().first();
+  // let checkpoints: string[] = [];
+  // if (project?.exercise_id) {
+  //   let ex = await getExerciseById(project.exercise_id);
+  //   checkpoints = ex.checkpoints;
+    
+  // }
+  // return Object.assign(project, { checkpoints: checkpoints });
 }
 
 async function requireProjectOwner(projectId: number, next: NextFunction) {

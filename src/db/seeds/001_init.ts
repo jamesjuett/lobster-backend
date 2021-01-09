@@ -57,4 +57,9 @@ export async function seed(knex: Knex): Promise<void> {
     { user_id: user_ids[0], project_id: project_ids[0] },
     { user_id: user_ids[0], project_id: project_ids[1] },
   ]);
+
+  await knex("exercises_checkpoints").insert([
+    { exercise_id: exercise_ids[0], checkpoint_key: "test_checkpoint_1" },
+    { exercise_id: exercise_ids[0], checkpoint_key: "test_checkpoint_2" },
+  ]);
 };
