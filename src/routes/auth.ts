@@ -15,12 +15,12 @@ passport.use(new GoogleStrategy(
       .select().first();
 
     if (!user) {
-      user = await db("users")
+      [user] = await db("users")
         .insert({
           email: email,
           name: "unnamed user"
         })
-        .returning("*").first();
+        .returning("*");
 
       if (!user) {
         // Error adding new user

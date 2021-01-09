@@ -138,9 +138,9 @@ projects_router
           return;
         }
         
-        let copy = await db("projects")
+        let [copy] = await db("projects")
           .insert(withoutProps(orig, "id", "last_modified"))
-          .returning("*").first();
+          .returning("*");
 
         if (copy) {
           res.status(201);
