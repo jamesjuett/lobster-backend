@@ -3,19 +3,19 @@ import passport from "passport";
 import { OAuth2Strategy as GoogleStrategy } from "passport-google-oauth";
 import { auth_config } from "../auth/config";
 import { generateJwt } from "../auth/jwt_auth";
-import { db } from "../db/db";
+import { query } from "../db/db";
 
 
 passport.use(new GoogleStrategy(
   auth_config.google,
   async (accessToken, refreshToken, profile, done) => {
     let email = profile.emails![0].value;
-    let user = await db("users")
+    let user = await query("users")
       .where({email: email})
       .select().first();
 
     if (!user) {
-      [user] = await db("users")
+      [user] = await query("users")
         .insert({
           email: email,
           name: "unnamed user"

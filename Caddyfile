@@ -12,6 +12,10 @@ route {
         reverse_proxy lobster-backend:3000
     }
 
+    route /public_api/* {
+        reverse_proxy lobster-backend:3000
+    }
+
     route /auth/* {
         reverse_proxy lobster-backend:3000
     }

@@ -5,4 +5,5 @@ import knexfile from '../knexfile';
 const env = process.env.NODE_ENV;
 assert(env === "development" || env === "testing" || env === "production");
 
-export const db = knex(knexfile[env]);
+
+export const query = knex(knexfile[env]);

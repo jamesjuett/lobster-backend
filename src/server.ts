@@ -31,7 +31,7 @@ app.use("/api/courses", courses_router);
 app.use("/api/exercises", exercises_router);
 
 // Public API routes do not require authentication
-app.use("/public", public_router);
+app.use("/public_api", public_router);
 
 // Route to obtain authentication
 // (does not require prior authentication)

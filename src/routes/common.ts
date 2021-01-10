@@ -8,7 +8,7 @@ export const urlencodedBodyParser = bodyParser.urlencoded({ extended: false });
 
 export {body as validateBody, param as validateParam} from 'express-validator';
 
-export function requireAllValid(req: Request, res: Response, next: NextFunction) {
+function requireAllValid(req: Request, res: Response, next: NextFunction) {
   let vr = validationResult(req);
   if (vr.isEmpty()) {
     next();

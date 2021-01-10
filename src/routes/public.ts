@@ -1,9 +1,10 @@
 import {Request, Response, Router, NextFunction } from "express";
-import {db} from "../db/db"
+import {query} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
-import { jsonBodyParser, requireAllValid } from "./common";
+import { createRoute, jsonBodyParser, NONE } from "./common";
 import { withoutProps } from "../db/db_types";
-import { getCourseByIdParam, getCourseByShortNameTermYear as getCourseByShortNameTermYearParams, getCourses } from "./courses";
+import { getCourseByIdRoute, getCourseByShortNameTermYearRoute, getCoursesRoute } from "./courses";
+import { getPublicCourseProjects } from "../db/db_courses";
 
 const validateParamId = validateParam("id").isInt();
 
@@ -29,12 +30,14 @@ const validateParamId = validateParam("id").isInt();
 export const public_router = Router();
 
 public_router
-  .get("/projects/:id",
-    validateParamId,
-    requireAllValid,
-    async (req,res) => {
+  .get("/projects/:id", createRoute({
+    
+    authorization: NONE,
+    preprocessing: NONE,
+    validation: validateParamId,
+    handler: async (req,res) => {
       let id = parseInt(req.params["id"]);
-      let project = await db("projects")
+      let project = await query("projects")
         .where({
           id: id,
           is_public: true,
@@ -53,39 +56,19 @@ public_router
         res.send("This project either does not exist or is not public.");
       }
     }
-  )
-  .get("/courses",
-    getCourses
-  )
-  .get("/courses/:id",
-    getCourseByIdParam
-  )
-  .get("/courses/:short_name/:term/:year",
-    getCourseByShortNameTermYearParams
-  )
-  .post("/:id/copy",
-      validateParamId,
-      requireAllValid,
-      async (req, res) => {
-        let id = parseInt(req.params["id"]);
-        let orig = await db("courses").where({id: id}).select().first();
-        if (!orig) {
-          res.sendStatus(404);
-          return;
-        }
-        
-        let [copy] = await db("courses")
-          .insert(withoutProps(orig, "id"))
-          .returning("*");
+  }))
+  .get("/courses", getCoursesRoute)
+  .get("/courses/:id", getCourseByIdRoute)
+  .get("/courses/:short_name/:term/:year", getCourseByShortNameTermYearRoute);
 
-        if (copy) {
-          res.status(201);
-          res.json(copy);
-        }
-        else {
-          res.sendStatus(500);
-        }
-
-      }
-    );
   
+public_router.route("/courses/:id/projects")
+  .get(createRoute({
+    authorization: NONE,
+    preprocessing: NONE,
+    validation: validateParamId,
+    handler: async (req: Request, res: Response) => {
+      let projects = await getPublicCourseProjects(parseInt(req.params["id"]));
+      res.status(200).json(projects);
+    }
+  }));

@@ -43,6 +43,15 @@ export async function seed(knex: Knex): Promise<void> {
       name: "Project 2",
       contents: '{"name": "Project 2", "files": [{"name": "program2.cpp", "code": "int main() {\\n  int x = 2;\\n  int y = x + x;\\n}", "isTranslationUnit": true}]}',
     },
+    {
+      name: "Project 3",
+      contents: '{"name": "Project 3", "files": [{"name": "program3.cpp", "code": "int main() {\\n  int x = 3;\\n  int y = x + x;\\n}", "isTranslationUnit": true}]}',
+    },
+    {
+      name: "Project 4 (Public)",
+      contents: '{"name": "Project 4", "files": [{"name": "program4.cpp", "code": "int main() {\\n  int x = 4;\\n  int y = x + x;\\n}", "isTranslationUnit": true}]}',
+      is_public: true,
+    },
   ]).returning("id");
   
   let exercise_ids = await knex("exercises").insert([
@@ -56,6 +65,13 @@ export async function seed(knex: Knex): Promise<void> {
   await knex("users_projects").insert([
     { user_id: user_ids[0], project_id: project_ids[0] },
     { user_id: user_ids[0], project_id: project_ids[1] },
+  ]);
+
+  await knex("courses_projects").insert([
+    { course_id: course_ids[0], project_id: project_ids[0] },
+    { course_id: course_ids[0], project_id: project_ids[1] },
+    { course_id: course_ids[0], project_id: project_ids[2] },
+    { course_id: course_ids[0], project_id: project_ids[3] },
   ]);
 
   await knex("exercises_checkpoints").insert([

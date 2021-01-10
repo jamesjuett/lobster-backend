@@ -1,11 +1,9 @@
 import {Request, Response, Router, NextFunction, RequestHandler } from "express";
-import {db} from "../db/db"
+import {query} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
 import { createRoute, jsonBodyParser, NONE, validateParamId, } from "./common";
 import { withoutProps } from "../db/db_types";
 import { getJwtUserInfo } from "../auth/jwt_auth";
-import { getExerciseById } from "./exercises";
-import { DB_Projects } from "knex/types/tables";
 
 const validateBodyName = validateBody("name").trim().isLength({min: 1, max: 100});
 const validateBodyContents = validateBody("contents").trim().isLength({max: 100000});
@@ -17,7 +15,7 @@ const validateBodyProject = [
 ];
 
 async function getProjectById(projectId: number) {
-  return await db("projects").where({id: projectId}).select().first();
+  return await query("projects").where({id: projectId}).select().first();
   // let checkpoints: string[] = [];
   // if (project?.exercise_id) {
   //   let ex = await getExerciseById(project.exercise_id);
@@ -54,14 +52,14 @@ projects_router
         let body : {[index:string]: string | undefined} = req.body;
         
         // Create and get a copy of the new project
-        let [newProject] = await db("projects").insert({
+        let [newProject] = await query("projects").insert({
           name: body.name!,
           contents: body.contents!
         }).returning("*");
 
         // Add current user as owner for project
         let userInfo = getJwtUserInfo(req);
-        await db("users_projects").insert({
+        await query("users_projects").insert({
           project_id: newProject!.id,
           user_id: userInfo.id
         });
@@ -101,7 +99,7 @@ projects_router
         let id = parseInt(req.params["id"]);
         let body : {[index:string]: string | undefined} = req.body;
 
-        await db("projects")
+        await query("projects")
           .where({id: id})
           .update({
             name: body.name,
@@ -116,7 +114,7 @@ projects_router
       validation: validateParamId,
       handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
-        await db("projects")
+        await query("projects")
           .where({id: id})
           .delete();
         res.sendStatus(204);
@@ -132,13 +130,13 @@ projects_router
       validation: validateParamId,
       handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
-        let orig = await db("projects").where({id: id}).select().first();
+        let orig = await query("projects").where({id: id}).select().first();
         if (!orig) {
           res.sendStatus(404);
           return;
         }
         
-        let [copy] = await db("projects")
+        let [copy] = await query("projects")
           .insert(withoutProps(orig, "id", "last_modified"))
           .returning("*");
 

@@ -1,11 +1,11 @@
 import { assert } from "console";
 import { Router, Request, Response } from "express";
 import { getJwtUserInfo } from "../auth/jwt_auth";
-import { db } from "../db/db";
+import { query } from "../db/db";
 import { createRoute, NONE, validateParamId } from "./common";
 
 async function getUserById(id: number) {
-  return await db("users").where({ id: id }).select().first();
+  return await query("users").where({ id: id }).select().first();
 }
 
 export const users_router = Router();
@@ -57,7 +57,7 @@ users_router.route("/:id/projects")
 
 
 async function getUserProjectsById(id: number) {
-  return await db("projects")
+  return await query("projects")
     .join("users_projects", "projects.id", "users_projects.project_id")
     .select("projects.*").where({user_id: id});
 }

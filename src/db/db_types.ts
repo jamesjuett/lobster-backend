@@ -44,6 +44,11 @@ declare module "knex/types/tables" {
     project_id: number;
   }
 
+  interface DB_Courses_Projects {
+    course_id: number;
+    project_id: number;
+  }
+
   interface DB_Exercises_Checkpoints {
     exercise_id: number;
     checkpoint_key: string;
@@ -100,6 +105,17 @@ declare module "knex/types/tables" {
         // Insert Type
         //   ALL Required
         DB_Users_Projects,
+        // Update Type
+        //   Doesn't make sense to update (you should be using insert/delete)
+        never
+      >;
+
+      courses_projects: Knex.CompositeTableType<
+        // Base Type
+        DB_Courses_Projects,
+        // Insert Type
+        //   ALL Required
+        DB_Courses_Projects,
         // Update Type
         //   Doesn't make sense to update (you should be using insert/delete)
         never
