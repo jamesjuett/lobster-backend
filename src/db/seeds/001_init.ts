@@ -55,8 +55,8 @@ export async function seed(knex: Knex): Promise<void> {
   ]).returning("id");
   
   let exercise_ids = await knex("exercises").insert([
-    { name: "test exercise 1", starter_project_id: project_ids[0] },
-    { name: "test exercise 2", starter_project_id: project_ids[1] },
+    { starter_project_id: project_ids[0], exercise_key: "test_exercise_1" },
+    { starter_project_id: project_ids[1], exercise_key: "test_exercise_2" },
   ]).returning("id");
   
   await knex("projects").where({ id: project_ids[0] }).update({ exercise_id: exercise_ids[0] });
@@ -74,8 +74,8 @@ export async function seed(knex: Knex): Promise<void> {
     { course_id: course_ids[0], project_id: project_ids[3] },
   ]);
 
-  await knex("exercises_checkpoints").insert([
-    { exercise_id: exercise_ids[0], checkpoint_key: "test_checkpoint_1" },
-    { exercise_id: exercise_ids[0], checkpoint_key: "test_checkpoint_2" },
+  await knex("exercises_extras").insert([
+    { exercise_id: exercise_ids[0], extra_key: "test_extra_1" },
+    { exercise_id: exercise_ids[0], extra_key: "test_extra_2" },
   ]);
 };

@@ -26,8 +26,8 @@ declare module "knex/types/tables" {
 
   interface DB_Exercises {
     id: number;
-    name: string;
     starter_project_id: number;
+    exercise_key: string;
   }
 
   interface DB_Projects {
@@ -49,9 +49,9 @@ declare module "knex/types/tables" {
     project_id: number;
   }
 
-  interface DB_Exercises_Checkpoints {
+  interface DB_Exercises_Extras {
     exercise_id: number;
-    checkpoint_key: string;
+    extra_key: string;
   }
   
   type ExceptID<T> = Knex.CompositeTableType<T, Omit<T, "id"> & {id?: undefined}, Partial<Omit<T, "id">> & {id?: undefined}>;
@@ -121,12 +121,12 @@ declare module "knex/types/tables" {
         never
       >;
 
-      exercises_checkpoints: Knex.CompositeTableType<
+      exercises_extras: Knex.CompositeTableType<
         // Base Type
-        DB_Exercises_Checkpoints,
+        DB_Exercises_Extras,
         // Insert Type
         //   ALL Required
-        DB_Exercises_Checkpoints,
+        DB_Exercises_Extras,
         // Update Type
         //   Doesn't make sense to update (you should be using insert/delete)
         never

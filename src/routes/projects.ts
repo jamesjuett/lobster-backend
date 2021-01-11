@@ -16,13 +16,6 @@ const validateBodyProject = [
 
 async function getProjectById(projectId: number) {
   return await query("projects").where({id: projectId}).select().first();
-  // let checkpoints: string[] = [];
-  // if (project?.exercise_id) {
-  //   let ex = await getExerciseById(project.exercise_id);
-  //   checkpoints = ex.checkpoints;
-    
-  // }
-  // return Object.assign(project, { checkpoints: checkpoints });
 }
 
 async function requireProjectOwner(projectId: number, next: NextFunction) {

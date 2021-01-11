@@ -25,7 +25,7 @@ export async function up(knex: Knex): Promise<void> {
     })
     .createTable("exercises", table => {
       table.increments("id").primary();
-      table.string("name", 100).notNullable();
+      table.string("exercise_key", 50).notNullable();
     })
     .createTable("projects", table => {
       table.increments("id").primary();
