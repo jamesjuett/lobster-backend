@@ -5,7 +5,7 @@ import jsonwebtoken from "jsonwebtoken";
 import { Request } from "express";
 
 
-interface JwtUserInfo {
+export interface JwtUserInfo {
   id: number;
 };
 

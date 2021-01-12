@@ -28,3 +28,11 @@ export async function getCourseByShortNameTermYear(short_name: string, term: str
       year: year
     }).select().first();
 }
+
+export async function isCourseAdmin(user_id: number, course_id: number) {
+  return !!await query("users_courses").where({
+    user_id: user_id,
+    course_id: course_id,
+    is_admin: true
+  }).select().first();
+}

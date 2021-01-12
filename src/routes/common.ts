@@ -29,8 +29,8 @@ export function createRoute(handlers: CommonRouteHandlers) {
   
   return [
     ...(Array.isArray(handlers.preprocessing) ? handlers.preprocessing : [handlers.preprocessing]),
-    ...(Array.isArray(handlers.authorization) ? handlers.authorization : [handlers.authorization]),
     ...(Array.isArray(handlers.validation) ? handlers.validation : [handlers.validation]),
+    ...(Array.isArray(handlers.authorization) ? handlers.authorization : [handlers.authorization]),
     requireAllValid,
     ...(Array.isArray(handlers.handler) ? handlers.handler : [handlers.handler]),
   ];

@@ -57,10 +57,14 @@ export async function seed(knex: Knex): Promise<void> {
   let exercise_ids = await knex("exercises").insert([
     { starter_project_id: project_ids[0], exercise_key: "test_exercise_1" },
     { starter_project_id: project_ids[1], exercise_key: "test_exercise_2" },
+    { starter_project_id: project_ids[2], exercise_key: "test_exercise_3" },
+    { starter_project_id: project_ids[3], exercise_key: "test_exercise_4" },
   ]).returning("id");
   
   await knex("projects").where({ id: project_ids[0] }).update({ exercise_id: exercise_ids[0] });
   await knex("projects").where({ id: project_ids[1] }).update({ exercise_id: exercise_ids[1] });
+  await knex("projects").where({ id: project_ids[2] }).update({ exercise_id: exercise_ids[2] });
+  await knex("projects").where({ id: project_ids[3] }).update({ exercise_id: exercise_ids[3] });
 
   await knex("users_projects").insert([
     { user_id: user_ids[0], project_id: project_ids[0] },

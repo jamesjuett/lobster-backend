@@ -20,6 +20,18 @@ export async function getExerciseById(exercise_id: number) {
   )
 }
 
+export async function createExerciseForProject(project_id: number) {
+  let new_ex_id = (await query("exercises").insert({
+    exercise_key: "",
+    starter_project_id: project_id
+  }).returning("id"))[0];
+
+  await query("projects")
+    .where({id: project_id})
+    .update({exercise_id: new_ex_id});
+  
+  return new_ex_id;
+}
 
 const validateBodyExerciseKey = validateBody("exercise_key").trim().isLength({min: 1, max: 50});
 
@@ -60,14 +72,14 @@ exercises_router
       ],
       handler: async (req: Request, res: Response) => {
         let id = parseInt(req.params["id"]);
-        let body : {[index:string]: string | undefined} = req.body;
+        let body = req.body;
 
         await query("exercises")
           .where({id: id})
           .update({
             exercise_key: body.exercise_key
           });
-          
+
         res.sendStatus(204);
       }
     }));
