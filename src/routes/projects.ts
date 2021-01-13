@@ -4,8 +4,8 @@ import {body as validateBody, param as validateParam, validationResult } from 'e
 import { createRoute, jsonBodyParser, NONE, validateParamId, } from "./common";
 import { withoutProps } from "../db/db_types";
 import { getJwtUserInfo, JwtUserInfo } from "../auth/jwt_auth";
-import { getExerciseById } from "../db/db_exercises";
-import { getProjectById, hasReadAccess, hasWriteAccess } from "../db/db_projects";
+import { getFullExerciseById } from "../db/db_exercises";
+import { getProjectById, hasProjectReadAccess, hasProjectWriteAccess } from "../db/db_projects";
 
 const validateBodyName = validateBody("name").trim().isLength({min: 1, max: 100});
 const validateBodyContents = validateBody("contents").trim().isLength({max: 100000});
@@ -20,7 +20,7 @@ async function requireProjectReadPrivileges(req: Request, res: Response, next: N
   let user_id = getJwtUserInfo(req).id;
   let project_id = parseInt(req.params["id"]);
 
-  if (await hasReadAccess(user_id, project_id)) {
+  if (await hasProjectReadAccess(user_id, project_id)) {
     return next();
   }
   else {
@@ -34,7 +34,7 @@ async function requireProjectWritePrivileges(req: Request, res: Response, next: 
   let user_id = getJwtUserInfo(req).id;
   let project_id = parseInt(req.params["id"]);
 
-  if (await hasWriteAccess(user_id, project_id)) {
+  if (await hasProjectWriteAccess(user_id, project_id)) {
     return next();
   }
   else {
@@ -146,8 +146,8 @@ projects_router
           let project = await getProjectById(parseInt(req.params["id"]));
           if (project) {
             Object.assign(project, {
-              write_access: await hasWriteAccess(getJwtUserInfo(req).id, project.id),
-              exercise: await getExerciseById(project.exercise_id!)
+              write_access: await hasProjectWriteAccess(getJwtUserInfo(req).id, project.id),
+              exercise: await getFullExerciseById(project.exercise_id!)
             })
             
             res.status(200).json(project);

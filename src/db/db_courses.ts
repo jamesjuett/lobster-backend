@@ -1,6 +1,6 @@
 import { DB_Projects } from "knex/types/tables";
 import { query } from "./db";
-import { createExercise, getExerciseById } from "./db_exercises";
+import { createExercise, getFullExerciseById } from "./db_exercises";
 
 
 export async function getCourse(id: number) {

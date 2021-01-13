@@ -3,9 +3,9 @@ import { param as validateParam } from 'express-validator';
 import { createRoute, NONE } from "./common";
 import { getCourseByIdRoute, getCourseByShortNameTermYearRoute, getCoursesRoute } from "./courses";
 import { getPublicCourseProjects } from "../db/db_courses";
-import { getProjectById, hasWriteAccess, isProjectPublic } from "../db/db_projects";
+import { getProjectById, hasProjectWriteAccess, isProjectPublic } from "../db/db_projects";
 import { getJwtUserInfo } from "../auth/jwt_auth";
-import { getExerciseById } from "../db/db_exercises";
+import { getFullExerciseById } from "../db/db_exercises";
 
 const validateParamId = validateParam("id").isInt();
 
@@ -58,7 +58,7 @@ public_router
         if (project) {
           Object.assign(project, {
             write_access: false,
-            exercise: await getExerciseById(project.exercise_id!)
+            exercise: await getFullExerciseById(project.exercise_id!)
           })
           
           res.status(200).json(project);

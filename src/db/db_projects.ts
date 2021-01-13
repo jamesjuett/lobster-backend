@@ -1,7 +1,7 @@
 import { DB_Projects } from "knex/types/tables";
 import { assert } from "../util/util";
 import { query } from "./db";
-import { createExercise, getExerciseById } from "./db_exercises";
+import { createExercise, getFullExerciseById } from "./db_exercises";
 
 export async function getProjectById(projectId: number) {
   return await query("projects").where({id: projectId}).select().first();
@@ -30,13 +30,13 @@ export async function isAdminForProjectCourse(user_id: number, project_id: numbe
     }).select().first();
 }
 
-export async function hasReadAccess(user_id: number, project_id: number) {
+export async function hasProjectReadAccess(user_id: number, project_id: number) {
   return await isProjectPublic(project_id) ||
          await isProjectOwner(user_id, project_id) ||
          await isAdminForProjectCourse(user_id, project_id);
 }
 
-export async function hasWriteAccess(user_id: number, project_id: number) {
+export async function hasProjectWriteAccess(user_id: number, project_id: number) {
   return await isProjectOwner(user_id, project_id) ||
          await isAdminForProjectCourse(user_id, project_id);
 }
@@ -44,7 +44,7 @@ export async function hasWriteAccess(user_id: number, project_id: number) {
 
 async function createProject(name: string, contents: string, exercise_id: number | undefined, is_public: boolean | undefined) {
 
-  let exercise = exercise_id ? await getExerciseById(exercise_id) : await createExercise();
+  let exercise = exercise_id ? await getFullExerciseById(exercise_id) : await createExercise();
   assert(exercise); // fails if someone called us with a bad exercise_id
 
   // Create and get a copy of the new project

@@ -109,3 +109,5 @@ secret/
 secrets/
 certs/
 data/*.json
+public/*
+!public/.gitkeep
