@@ -1,62 +1,30 @@
-import {Request, Response, Router, NextFunction } from "express";
-import {query} from "../db/db"
-import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
-import { createRoute, jsonBodyParser, NONE } from "./common";
-import { withoutProps } from "../db/db_types";
+import {NextFunction, Request, Response, Router } from "express";
+import { param as validateParam } from 'express-validator';
+import { createRoute, NONE } from "./common";
 import { getCourseByIdRoute, getCourseByShortNameTermYearRoute, getCoursesRoute } from "./courses";
 import { getPublicCourseProjects } from "../db/db_courses";
+import { getProjectById, hasWriteAccess, isProjectPublic } from "../db/db_projects";
+import { getJwtUserInfo } from "../auth/jwt_auth";
+import { getExerciseById } from "../db/db_exercises";
 
 const validateParamId = validateParam("id").isInt();
 
-// const validateBodyContents = validateBody("contents").trim().isLength({max: 100000});
+async function requireProjectIsPublic(req: Request, res: Response, next: NextFunction) {
+  let project_id = parseInt(req.params["id"]);
 
-// const validateBodyProject = [
-//   validateBodyContents
-// ];
+  if (await isProjectPublic(project_id)) {
+    return next();
+  }
+  else {
+    // Not authorized
+    res.sendStatus(403);
+  }
 
-// async function getProjectById(projectId: number) {
-//   return await db("projects").where({id: projectId}).select().first();
-// }
-
-// async function requireProjectOwner(projectId: number, next: NextFunction) {
-//   if (false) { // TODO: fix this
-//     next();
-//   }
-//   else {
-//     throw new Error("test");
-//   }
-// }
+}
 
 export const public_router = Router();
 
 public_router
-  .get("/projects/:id", createRoute({
-    
-    authorization: NONE,
-    preprocessing: NONE,
-    validation: validateParamId,
-    handler: async (req,res) => {
-      let id = parseInt(req.params["id"]);
-      let project = await query("projects")
-        .where({
-          id: id,
-          is_public: true,
-        })
-        .select().first();
-
-      if (project) {
-        res.json(project);
-        res.status(200);
-      }
-      else {
-        // Send 404 and a vague message since we don't care to tell them
-        // whether the project exists or not (and the DB result doesn't
-        // even tell us here).
-        res.status(404);
-        res.send("This project either does not exist or is not public.");
-      }
-    }
-  }))
   .get("/courses", getCoursesRoute)
   .get("/courses/:id", getCourseByIdRoute)
   .get("/courses/:short_name/:term/:year", getCourseByShortNameTermYearRoute);
@@ -72,3 +40,31 @@ public_router.route("/courses/:id/projects")
       res.status(200).json(projects);
     }
   }));
+
+  
+
+public_router
+.route("/projects/:id/full")
+  .get(createRoute({
+    preprocessing:
+      NONE,
+    validation:
+      validateParamId,
+    authorization:
+      requireProjectIsPublic,
+    handler:
+      async (req,res) => {
+        let project = await getProjectById(parseInt(req.params["id"]));
+        if (project) {
+          Object.assign(project, {
+            write_access: false,
+            exercise: await getExerciseById(project.exercise_id!)
+          })
+          
+          res.status(200).json(project);
+        }
+        else {
+          res.sendStatus(404);
+        }
+      }
+  }))

@@ -29,14 +29,14 @@ export async function up(knex: Knex): Promise<void> {
     })
     .createTable("projects", table => {
       table.increments("id").primary();
-      table.integer("exercise_id").unsigned().nullable()
+      table.integer("exercise_id").unsigned().notNullable()
         .references("id").inTable("exercises").onDelete("restrict");
       table.timestamp("last_modified").notNullable().defaultTo(knex.fn.now());
       table.text("contents").notNullable();
     })
     .alterTable("exercises", table => {
-      table.integer("starter_project_id").unsigned().notNullable()
-        .references("id").inTable("projects").onDelete("restrict");
+      table.integer("starter_project_id").unsigned().nullable()
+        .references("id").inTable("projects").onDelete("set null");
     });
 }
 

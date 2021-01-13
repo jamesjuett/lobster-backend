@@ -1,5 +1,11 @@
 import * as dotenv from 'dotenv';
 
+export function assert(condition: any, message: string = "") : asserts condition {
+  if (!condition) {
+    throw Error("Assert failed: " + message);
+  }
+};
+
 export function assertExists<T>(obj: T | undefined) : T {
   if (obj === undefined) {
     throw new Error();

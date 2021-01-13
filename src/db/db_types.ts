@@ -26,13 +26,13 @@ declare module "knex/types/tables" {
 
   interface DB_Exercises {
     id: number;
-    starter_project_id: number;
+    starter_project_id?: number;
     exercise_key: string;
   }
 
   interface DB_Projects {
     id: number;
-    exercise_id?: number | null;
+    exercise_id: number | null;
     last_modified: string; // date
     contents: string;
     is_public: boolean;

@@ -3,9 +3,9 @@ import { DB_Courses, DB_Projects } from "knex/types/tables";
 import { getJwtUserInfo } from "../auth/jwt_auth";
 import { query } from "../db/db"
 import { getCourse, getAllCourseProjects, getCourseByShortNameTermYear, isCourseAdmin, getPublicCourseProjects } from "../db/db_courses";
+import { createCourseProject } from "../db/db_projects";
 import { withoutProps } from "../db/db_types";
 import { jsonBodyParser, validateBody, validateParam, createRoute, NONE, validateParamId } from "./common";
-import { createExerciseForProject, getExerciseById } from "./exercises";
 import { validateBodyProject } from "./projects";
 
 const validateParamShortName = validateParam("short_name").trim().isLength({min: 1, max: 20});
@@ -206,33 +206,14 @@ courses_router.route("/:id/projects")
       async (req: Request, res: Response) => {
         let body = req.body;
         
-        // Create and get a copy of the new project
-        let [newProject] = await query("projects").insert({
-          name: body.name!,
-          contents: body.contents!,
-          exercise_id: body.exercise_id,
-          is_public: body.is_public
-        }).returning("*");
-
-        // If the exercise_id was undefined, go ahead and
-        // create a new exercise and attach it.
-        if (!newProject.exercise_id) {
-          newProject.exercise_id = await createExerciseForProject(newProject.id);
-        }
-
-        Object.assign(newProject, {
-          write_access: true, // must have write access if you're creating it
-          exercise: await getExerciseById(newProject.exercise_id!)
-        });
-
-        // Add project to course
-        await query("courses_projects").insert({
-          project_id: newProject!.id,
-          course_id: parseInt(req.params["id"])
-        });
+        let newProject = await createCourseProject(
+          parseInt(req.params["id"]),
+          body.name!,
+          body.contents!,
+          body.exercise_id,
+          body.is_public
+        );
 
         res.status(201).json(newProject);
       }
   }));
-
-  

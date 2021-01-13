@@ -4,7 +4,8 @@ import {body as validateBody, param as validateParam, validationResult } from 'e
 import { createRoute, jsonBodyParser, NONE, validateParamId, } from "./common";
 import { withoutProps } from "../db/db_types";
 import { getJwtUserInfo, JwtUserInfo } from "../auth/jwt_auth";
-import { getExerciseById } from "./exercises";
+import { getExerciseById } from "../db/db_exercises";
+import { getProjectById, hasReadAccess, hasWriteAccess } from "../db/db_projects";
 
 const validateBodyName = validateBody("name").trim().isLength({min: 1, max: 100});
 const validateBodyContents = validateBody("contents").trim().isLength({max: 100000});
@@ -14,44 +15,6 @@ export const validateBodyProject = [
   validateBodyName,
   validateBodyContents
 ];
-
-async function getProjectById(projectId: number) {
-  return await query("projects").where({id: projectId}).select().first();
-}
-
-async function isProjectPublic(project_id: number) {
-  return !!await query("projects").where({
-    id: project_id
-  }).select("is_public").first();
-}
-
-async function isProjectOwner(user_id: number, project_id: number) {
-  return !!await query("users_projects").where({
-    user_id: user_id,
-    project_id: project_id
-  }).select().first();
-}
-
-async function isAdminForProjectCourse(user_id: number, project_id: number) {
-  return !!await query("users_courses")
-    .join('courses_projects', 'users_courses.course_id', 'courses_projects.course_id')
-    .where({
-      user_id: user_id,
-      project_id: project_id,
-      is_admin: true,
-    }).select().first();
-}
-
-export async function hasReadAccess(user_id: number, project_id: number) {
-  return await isProjectPublic(project_id) ||
-         await isProjectOwner(user_id, project_id) ||
-         await isAdminForProjectCourse(user_id, project_id);
-}
-
-export async function hasWriteAccess(user_id: number, project_id: number) {
-  return await isProjectOwner(user_id, project_id) ||
-         await isAdminForProjectCourse(user_id, project_id);
-}
 
 async function requireProjectReadPrivileges(req: Request, res: Response, next: NextFunction) {
   let user_id = getJwtUserInfo(req).id;

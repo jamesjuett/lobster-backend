@@ -108,3 +108,4 @@ build/
 secret/
 secrets/
 certs/
+data/*.json
