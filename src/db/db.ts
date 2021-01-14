@@ -7,3 +7,7 @@ assert(env === "development" || env === "testing" || env === "production");
 
 
 export const query = knex(knexfile[env]);
+
+export function first<T>(results: readonly T[]) : T | undefined {
+    return results[0];
+}

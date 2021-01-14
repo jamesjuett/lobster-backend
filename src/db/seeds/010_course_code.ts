@@ -9,6 +9,8 @@ type OldProjectData = {
 
 export async function seed(knex: Knex): Promise<void> {
 
+  console.log("Populating starter projects for courses...");
+
   let oldProjects: OldProjectData[] = JSON.parse(fs.readFileSync('../data/course_code.json', 'utf8'));
 
   let courses = await knex("courses").select();
