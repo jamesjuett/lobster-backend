@@ -23,6 +23,10 @@ route {
         redir https://eecsoh.eecs.umich.edu{uri}
     }
 
+    route /matcrab {
+        redir https://lobster.eecs.umich.edu/matcrab.html
+    }
+
     route /matlab* {
         redir https://lobster.eecs.umich.edu/matcrab.html
     }
