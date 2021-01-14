@@ -49,7 +49,7 @@ services:
     image: caddy:2.1.1
     restart: always
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./Caddyfile-prod:/etc/caddy/Caddyfile
       - ./public:/public
       - caddy_data:/data
       - caddy_config:/config
