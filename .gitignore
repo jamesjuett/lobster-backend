@@ -105,8 +105,8 @@ dist
 
 # lobster-backend
 build/
-secret/
-secrets/
+secrets/*
+!secrets/.gitkeep
 certs/
 data/*.json
 #public/*
