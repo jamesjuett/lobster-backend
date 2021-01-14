@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!--suppress ALL -->
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+    <!-- Always force latest IE rendering engine (even in intranet) & Chrome Frame
+    Remove this if you use the .htaccess -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+
+    <title>Lobster Regression Tests</title>
+    <meta name="description" content="" />
+    <meta name="author" content="James Juett" />
+    
+    <link rel="stylesheet" href="bootstrap/css/bootstrap.css">
+    <link rel="stylesheet" href="css/buttons.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/code.css">
+    <link rel="stylesheet" href="css/regression.css">
+    <link href="https://fonts.googleapis.com/css?family=Muli" rel="stylesheet">
+
+    <script src = "lobster/js/regression.bundle.js"></script>
+
+</head>
+
+<body>
+
+
+<div class="page-header" style="margin-top: 5px; margin-bottom: 5px; padding-bottom: 5px">
+    <div class="container-fluid">
+        <h4 style="display: inline-block; vertical-align: middle;">Lobster Regression Tests: <span id="allTestsResults"></span></h4>
+        <!--<h5 id="accountMessage" class="text-danger" style="float: right; margin-left: 5px; margin-right: 5px">Sign Out</h5>-->
+    </div>
+</div>
+
+<div id="regression_tests">
+
+</div>
+
+</body>
+</html>
+
+
+
+<!-- MORE TESTS BELOW -->
+
+
+<!-- #include <iostream>
+
+  using namespace std;
+  
+  class A{
+  private:
+    int *data;
+  public:
+    A(int num)
+      : data(new int(num)) {
+      cout << "A ctor" << endl;
+      cout << "allocated a new " << *data << " on the heap" << endl;
+      }
+  
+    A(const A &other)
+      : data(new int(*other.data + 10)) {
+      cout << "A copy" << endl;
+      cout << "allocated a new " << *data << " on the heap" << endl;
+      throw string("explode");
+    }
+  
+    ~A() {
+      cout << "A dtor" << endl;
+      cout << "cleaning up the " << *data << endl;
+      delete data;
+    }
+  
+  };
+  
+  A & func(A &a) {
+    int x;
+    cout << "func addr: " << &x << endl;
+    cout << "arg eval" << endl;
+    return a;
+  }
+  
+  void blah(A a, A a1) {
+    cout << "blah addr: " << &a << endl;
+    cout << "blah" << endl;
+  }
+  
+  int main() {
+    try{
+      int y;
+      cout << "main addr: " << &y << endl;
+      std::cout << "Hello World!\n";
+      A a1(1);
+      A a2(2);
+      blah(func(a1), func(a2));
+    }
+    catch(const string &e) {
+      cout << "caught: " << e << endl;
+    }
+  } -->

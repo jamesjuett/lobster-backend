@@ -1,4 +1,4 @@
-import { dotenv_config } from "./util/util";
+import { assertExists, dotenv_config, getDockerSecret } from "./util/util";
 
 dotenv_config()
 
@@ -7,11 +7,11 @@ type knex_config = {[index:string]: any};
 const development : knex_config = {
   client: 'pg',
   connection: {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    host: assertExists(process.env.DB_HOST),
+    port: assertExists(process.env.DB_PORT),
+    user: assertExists(process.env.DB_USER),
+    password: getDockerSecret("db_password"),
+    database: assertExists(process.env.DB_NAME)
   },
   migrations: {
     directory: './db/migrations',
@@ -22,11 +22,11 @@ const development : knex_config = {
 const testing : knex_config = {
   client: 'pg',
   connection: {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    host: assertExists(process.env.DB_HOST),
+    port: assertExists(process.env.DB_PORT),
+    user: assertExists(process.env.DB_USER),
+    password: getDockerSecret("db_password"),
+    database: assertExists(process.env.DB_NAME)
   },
   migrations: {
     directory: './db/migrations',
@@ -37,11 +37,11 @@ const testing : knex_config = {
 const production : knex_config = {
   client: 'pg',
   connection: {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    host: assertExists(process.env.DB_HOST),
+    port: assertExists(process.env.DB_PORT),
+    user: assertExists(process.env.DB_USER),
+    password: getDockerSecret("db_password"),
+    database: assertExists(process.env.DB_NAME)
   },
   migrations: {
     directory: './db/migrations',

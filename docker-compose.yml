@@ -7,16 +7,22 @@ services:
     build:
       context: .
     command: "wait-for-it db:5432 -- bash -c \"npm run migrate && pm2-runtime ./build/server.js\""
+    restart: always
     environment:
-      DB_SCHEMA: postgres
-      DB_USER: postgres
-      DB_PASSWORD: postgres
+      DB_NAME: lobster
+      DB_USER: lobster
       DB_HOST: db
       DB_PORT: 5432
+      NODE_ENV: development
+    secrets:
+      - db_password
+      - jwt_secret
+      - google_client_secret
+
     depends_on:
       - db
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     volumes:
       - ./data:/usr/src/app/data
     networks:
@@ -25,11 +31,15 @@ services:
 
   db:
     image: postgres
+    restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: lobster
+      POSTGRES_DB: lobster
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
     ports: 
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - lobster-db:/var/lib/postgresql/data
     networks:
@@ -54,3 +64,11 @@ volumes:
 networks:
   http:
   db:
+
+secrets:
+  db_password:
+      file: ./secrets/db_password
+  jwt_secret:
+      file: ./secrets/jwt_secret
+  google_client_secret:
+      file: ./secrets/google_client_secret
