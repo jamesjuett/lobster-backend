@@ -3,7 +3,7 @@ import { getJwtUserInfo } from "../auth/jwt_auth";
 import { query } from "../db/db"
 import { getFullExerciseById, getStarterProjectForExercise } from "../db/db_exercises";
 import { hasProjectReadAccess, hasProjectWriteAccess } from "../db/db_projects";
-import { createRoute, jsonBodyParser, NONE, validateBody, validateParamId } from "./common";
+import { createRoute, jsonBodyParser, NO_PREPROCESSING, validateBody, validateParamId } from "./common";
 
 // export async function getExercisesForCourse(course_id: number) {
 //   return await db("exercises").where({course_id: course_id}).select();
@@ -51,7 +51,7 @@ exercises_router
   .route("/:id")
     .get(createRoute({
       preprocessing:
-        NONE,
+        NO_PREPROCESSING,
       validation:
         validateParamId,
       authorization:

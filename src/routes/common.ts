@@ -1,6 +1,8 @@
 import bodyParser from 'body-parser';
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import { param as validateParam, body as validateBody, ValidationChain, validationResult } from 'express-validator';
+import { getJwtUserInfo } from '../auth/jwt_auth';
+import { isSuperUser } from '../db/db_user';
 
 // Body parsers
 export const jsonBodyParser = bodyParser.json();
@@ -16,6 +18,19 @@ function requireAllValid(req: Request, res: Response, next: NextFunction) {
   else {
     res.status(400).json({ errors: vr.array() });
   }
+}
+
+export async function requireSuperUser(req: Request, res: Response, next: NextFunction) {
+  let user_id = getJwtUserInfo(req).id;
+
+  if (await isSuperUser(user_id)) {
+    return next();
+  }
+  else {
+    // Not authorized
+    res.sendStatus(403);
+  }
+
 }
 
 export interface CommonRouteHandlers {
@@ -36,7 +51,9 @@ export function createRoute(handlers: CommonRouteHandlers) {
   ];
 }
 
-export const NONE = [] as readonly never[];
+export const NO_PREPROCESSING = [] as readonly never[];
+export const NO_VALIDATION = [] as readonly never[];
+export const NO_AUTHORIZATION = [] as readonly never[];
 
 // .post("/",
 // jsonBodyParser,

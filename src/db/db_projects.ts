@@ -1,4 +1,3 @@
-import { DB_Projects } from "knex/types/tables";
 import { assert } from "../util/util";
 import { query } from "./db";
 import { createExercise, getFullExerciseById } from "./db_exercises";

@@ -5,7 +5,7 @@ import { query } from "../db/db"
 import { getCourse, getAllCourseProjects, getCourseByShortNameTermYear, isCourseAdmin, getPublicCourseProjects } from "../db/db_courses";
 import { createCourseProject } from "../db/db_projects";
 import { withoutProps } from "../db/db_types";
-import { jsonBodyParser, validateBody, validateParam, createRoute, NONE, validateParamId } from "./common";
+import { jsonBodyParser, validateBody, validateParam, createRoute, validateParamId, requireSuperUser, NO_AUTHORIZATION, NO_PREPROCESSING, NO_VALIDATION } from "./common";
 import { validateBodyProject } from "./projects";
 
 const validateParamShortName = validateParam("short_name").trim().isLength({min: 1, max: 20});
@@ -25,10 +25,25 @@ const validateBodyCourse = [
 ];
 
 
+
+async function requireCourseAdmin(req: Request, res: Response, next: NextFunction) {
+  let user_id = getJwtUserInfo(req).id;
+  let course_id = parseInt(req.params["id"]);
+
+  if (await isCourseAdmin(user_id, course_id)) {
+    return next();
+  }
+  else {
+    // Not authorized
+    res.sendStatus(403);
+  }
+
+}
+
 export const getCoursesRoute = createRoute({
-  authorization: NONE,
-  preprocessing: NONE,
-  validation: NONE,
+  preprocessing: NO_PREPROCESSING,
+  validation: NO_VALIDATION,
+  authorization: NO_AUTHORIZATION,
   handler: async (req: Request, res: Response) => {
     res.status(200);
     res.json(await query("courses").select());
@@ -37,9 +52,9 @@ export const getCoursesRoute = createRoute({
 
 
 export const getCourseByIdRoute = createRoute({
-  authorization: NONE,
-  preprocessing: NONE,
+  preprocessing: NO_PREPROCESSING,
   validation: validateParamId,
+  authorization: NO_AUTHORIZATION,
   handler: async (req: Request, res: Response) => {
     let course = await getCourse(parseInt(req.params["id"]));
     if (course) {
@@ -54,13 +69,13 @@ export const getCourseByIdRoute = createRoute({
 });
 
 export const getCourseByShortNameTermYearRoute = createRoute({
-  authorization: NONE,
-  preprocessing: NONE,
+  preprocessing: NO_PREPROCESSING,
   validation: [
     validateParamShortName,
     validateParamTerm,
     validateParamYear,
   ],
+  authorization: NO_AUTHORIZATION,
   handler: async (req: Request, res: Response) => {
     let course = getCourseByShortNameTermYear(
       req.params["short_name"],
@@ -83,7 +98,7 @@ export const courses_router = Router();
 courses_router
   .get("/", getCoursesRoute)
   .post("/", createRoute({
-    authorization: NONE,
+    authorization: requireSuperUser,
     preprocessing: jsonBodyParser,
     validation: [
       validateBody("id").not().exists(),
@@ -105,12 +120,12 @@ courses_router
   .route("/:id")
     .get(getCourseByIdRoute)
     .patch(createRoute({
-      authorization: NONE,
       preprocessing: jsonBodyParser,
       validation: [
         validateParamId,
         ...validateBodyCourse.map(v => v.optional())
       ],
+      authorization: requireCourseAdmin,
       handler: async (req: Request, res: Response) => {
         let id = parseInt(req.params["id"]);
         let body = req.body;
@@ -127,9 +142,9 @@ courses_router
       }
     }))
     .delete(createRoute({
-      authorization: NONE,
-      preprocessing: NONE,
+      preprocessing: NO_PREPROCESSING,
       validation: validateParamId,
+      authorization: requireSuperUser,
       handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
         await query("courses")
@@ -142,9 +157,9 @@ courses_router
 courses_router
   .route("/:id/copy")
     .post(createRoute({
-      authorization: NONE,
-      preprocessing: NONE,
+      preprocessing: NO_PREPROCESSING,
       validation: validateParamId,
+      authorization: requireSuperUser,
       handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
         let orig = await query("courses").where({id: id}).select().first();
@@ -177,9 +192,9 @@ courses_router
 
 courses_router.route("/:id/projects")
   .get(createRoute({
-    authorization: NONE,
-    preprocessing: NONE,
+    preprocessing: NO_PREPROCESSING,
     validation: validateParamId,
+    authorization: NO_AUTHORIZATION,
     handler: async (req: Request, res: Response) => {
       let user_id = getJwtUserInfo(req).id;
       let course_id = parseInt(req.params["id"]);
@@ -192,16 +207,13 @@ courses_router.route("/:id/projects")
     }
   }))
   .post(createRoute({
-    authorization:
-      NONE,
-    preprocessing:
-      jsonBodyParser,
+    preprocessing: jsonBodyParser,
     validation:
       [
         validateParamId,
-        validateBody("id").not().exists(),
         ...validateBodyProject
       ],
+    authorization: requireCourseAdmin,
     handler:
       async (req: Request, res: Response) => {
         let body = req.body;

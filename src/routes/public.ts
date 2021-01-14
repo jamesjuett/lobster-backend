@@ -1,6 +1,6 @@
 import {NextFunction, Request, Response, Router } from "express";
 import { param as validateParam } from 'express-validator';
-import { createRoute, NONE } from "./common";
+import { createRoute, NO_AUTHORIZATION, NO_PREPROCESSING } from "./common";
 import { getCourseByIdRoute, getCourseByShortNameTermYearRoute, getCoursesRoute } from "./courses";
 import { getPublicCourseProjects } from "../db/db_courses";
 import { getProjectById, hasProjectWriteAccess, isProjectPublic } from "../db/db_projects";
@@ -32,9 +32,9 @@ public_router
   
 public_router.route("/courses/:id/projects")
   .get(createRoute({
-    authorization: NONE,
-    preprocessing: NONE,
+    preprocessing: NO_PREPROCESSING,
     validation: validateParamId,
+    authorization: NO_AUTHORIZATION,
     handler: async (req: Request, res: Response) => {
       let projects = await getPublicCourseProjects(parseInt(req.params["id"]));
       res.status(200).json(projects);
@@ -46,12 +46,9 @@ public_router.route("/courses/:id/projects")
 public_router
 .route("/projects/:id/full")
   .get(createRoute({
-    preprocessing:
-      NONE,
-    validation:
-      validateParamId,
-    authorization:
-      requireProjectIsPublic,
+    preprocessing: NO_PREPROCESSING,
+    validation: validateParamId,
+    authorization: requireProjectIsPublic,
     handler:
       async (req,res) => {
         let project = await getProjectById(parseInt(req.params["id"]));

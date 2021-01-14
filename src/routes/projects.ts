@@ -1,7 +1,7 @@
 import {Request, Response, Router, NextFunction, RequestHandler } from "express";
 import {query} from "../db/db"
 import {body as validateBody, param as validateParam, validationResult } from 'express-validator';
-import { createRoute, jsonBodyParser, NONE, validateParamId, } from "./common";
+import { createRoute, jsonBodyParser, NO_PREPROCESSING, validateParamId, } from "./common";
 import { withoutProps } from "../db/db_types";
 import { getJwtUserInfo, JwtUserInfo } from "../auth/jwt_auth";
 import { getFullExerciseById } from "../db/db_exercises";
@@ -50,7 +50,7 @@ projects_router
   .route("/:id")
     .get(createRoute({
       preprocessing:
-        NONE,
+        NO_PREPROCESSING,
       validation:
         validateParamId,
       authorization:
@@ -89,7 +89,7 @@ projects_router
       }
     }))
     .delete(createRoute({
-      preprocessing: NONE,
+      preprocessing: NO_PREPROCESSING,
       validation: validateParamId,
       authorization:
         requireProjectWritePrivileges,
@@ -108,7 +108,7 @@ projects_router
     .post(createRoute({
       authorization:
         requireProjectReadPrivileges,
-      preprocessing: NONE,
+      preprocessing: NO_PREPROCESSING,
       validation: validateParamId,
       handler: async (req, res) => {
         let id = parseInt(req.params["id"]);
@@ -136,7 +136,7 @@ projects_router
   .route("/:id/full")
     .get(createRoute({
       preprocessing:
-        NONE,
+        NO_PREPROCESSING,
       validation:
         validateParamId,
       authorization:
