@@ -3,19 +3,24 @@ import { Router, Request, Response } from "express";
 import { getJwtUserInfo } from "../auth/jwt_auth";
 import { query } from "../db/db";
 import { createUserProject } from "../db/db_projects";
-import { createRoute, jsonBodyParser, NONE, validateBody, validateParamId } from "./common";
+import { createRoute, jsonBodyParser, NO_AUTHORIZATION, NO_PREPROCESSING, NO_VALIDATION, validateBody, validateParamId } from "./common";
 import { validateBodyProject } from "./projects";
 
 async function getUserById(id: number) {
   return await query("users").where({ id: id }).select().first();
 }
 
+// NOTE: The lack of authorization on these routes is because they
+// operate on resources owned by the current user. Thus, the authentication
+// they've already gone through with their JWT already verfies the
+// request is legit and they are authorized to access these resources.
+
 export const users_router = Router();
 users_router.route("/me")
   .get(createRoute({
-    authorization: NONE,
-    preprocessing: NONE,
-    validation: NONE,
+    preprocessing: NO_PREPROCESSING,
+    validation: NO_VALIDATION,
+    authorization: NO_AUTHORIZATION,
     handler: async (req: Request, res: Response) => {
       let userInfo = getJwtUserInfo(req);
       let user = await getUserById(userInfo.id);
@@ -32,9 +37,9 @@ users_router.route("/me")
 
 users_router.route("/me/projects")
   .get(createRoute({
-    authorization: NONE,
-    preprocessing: NONE,
-    validation: NONE,
+    preprocessing: NO_PREPROCESSING,
+    validation: NO_VALIDATION,
+    authorization: NO_AUTHORIZATION,
     handler: async (req: Request, res: Response) => {
       let userInfo = getJwtUserInfo(req);
       let projects = await getUserProjectsById(userInfo.id);
@@ -43,15 +48,13 @@ users_router.route("/me/projects")
     }
   }))
   .post(createRoute({
-    authorization:
-      NONE,
-    preprocessing:
-      jsonBodyParser,
+    preprocessing: jsonBodyParser,
     validation:
       [
         validateBody("id").not().exists(),
         ...validateBodyProject
       ],
+    authorization: NO_AUTHORIZATION,
     handler:
       async (req: Request, res: Response) => {
         let body = req.body;
@@ -71,9 +74,9 @@ users_router.route("/me/projects")
 
 users_router.route("/:id/projects")
   .get(createRoute({
-    authorization: NONE,
-    preprocessing: NONE,
+    preprocessing: NO_PREPROCESSING,
     validation: validateParamId,
+    authorization: NO_AUTHORIZATION,
     handler: async (req: Request, res: Response) => {
       let projects = await getUserProjectsById(parseInt(req.params["id"]));
       assert(projects);
