@@ -1,0 +1,77 @@
+# docker-compose.yml
+
+version: "3.7"
+services:
+
+  lobster-backend:
+    build:
+      context: .
+    command: "wait-for-it db:5432 -- bash -c \"npm run migrate && pm2-runtime ./build/server.js\""
+    restart: always
+    environment:
+      DB_NAME: lobster
+      DB_USER: lobster
+      DB_HOST: db
+      DB_PORT: 5432
+      NODE_ENV: development
+    secrets:
+      - db_password
+      - jwt_secret
+      - google_client_secret
+
+    depends_on:
+      - db
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - ./data:/usr/src/app/data
+    networks:
+        - http
+        - db
+
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: lobster
+      POSTGRES_DB: lobster
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    ports: 
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - lobster-db:/var/lib/postgresql/data
+    networks:
+      - db
+
+  caddy:
+    image: caddy:2.1.1
+    restart: always
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./public:/public
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - http
+    ports:
+      - "80:80"
+      - "443:443"
+        
+volumes:
+  lobster-db:
+  caddy_data:
+  caddy_config:
+
+networks:
+  http:
+  db:
+
+secrets:
+  db_password:
+      file: ./secrets/db_password
+  jwt_secret:
+      file: ./secrets/jwt_secret
+  google_client_secret:
+      file: ./secrets/google_client_secret
