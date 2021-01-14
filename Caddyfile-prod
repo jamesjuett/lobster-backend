@@ -16,6 +16,21 @@ route {
         reverse_proxy lobster-backend:3000
     }
 
+    route /eecsoh* {
+        redir /eecsoh /eecsoh/
+        uri strip_prefix /eecsoh
+        uri strip_prefix /queue.html
+        redir https://eecsoh.eecs.umich.edu{uri}
+    }
+
+    route /matlab* {
+        redir https://lobster.eecs.umich.edu/matcrab.html
+    }
+
+    route /engr101* {
+        redir https://lobster.eecs.umich.edu/matcrab.html
+    }
+
     file_server {
         root /public
         index index.html
