@@ -39,7 +39,7 @@ services:
     secrets:
       - db_password
     ports: 
-      - '127.0.0.1:54321:54321'
+      - '127.0.0.1:54321:5432'
     volumes:
       - lobster-db:/var/lib/postgresql/data
     networks:
