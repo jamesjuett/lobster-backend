@@ -3,6 +3,7 @@ import fs from 'fs';
 import { createUserProject } from "../db_projects";
 import { getOrCreateUser } from "../db_user";
 import { assert } from "../../util/util";
+import pLimit from "p-limit";
 
 type OldUserProjectData = {
   uniqname: string,
@@ -16,9 +17,14 @@ export async function seed(knex: Knex): Promise<void> {
   console.log("Populating user code projects for courses...");
 
   let oldProjects: OldUserProjectData[] = JSON.parse(fs.readFileSync('../data/user_code.json', 'utf8'));
-  let i = 0;
-  for(; i < oldProjects.length; ++i) {
-    let p = oldProjects[i];
+  // let i = 0;
+
+  // Run with limited concurrency so we don't have a ton of serial delay
+  // due to back and forth for each individual DB request, but also so we
+  // don't completely destroy everything with a bazillion requests at once.
+  const limit = pLimit(100);
+
+  let input = oldProjects.map((p,i) => limit(async () => {
 
     // Note - the old uniqname column actually contains emails
     let user = await getOrCreateUser(p.uniqname);
@@ -42,10 +48,11 @@ export async function seed(knex: Knex): Promise<void> {
     if (i % 100 === 0) {
       printStatus(i);
     }
-  }
+  }));
 
-  printStatus(i);
-  console.log();
+  await(Promise.all(input))
+  // printStatus(i);
+  console.log("done");
 }
 
 function printStatus(n: number) {
