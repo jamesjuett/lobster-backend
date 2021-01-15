@@ -38,6 +38,8 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
     secrets:
       - db_password
+    ports:
+      - '127.0.0.1:5000:5432'
     volumes:
       - lobster-db:/var/lib/postgresql/data
     networks:
