@@ -65,4 +65,5 @@ export declare class ProjectSaveOutlet {
     private onSaveFailed;
     private removeButtonClasses;
     private onProjectChanged;
+    private onSaveRequested;
 }

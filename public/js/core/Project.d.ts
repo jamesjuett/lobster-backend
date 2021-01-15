@@ -7,7 +7,7 @@ export interface FileData {
     readonly code: string;
     readonly isTranslationUnit: boolean;
 }
-declare type ProjectMessages = "nameSet" | "compilationOutOfDate" | "compilationFinished" | "fileAdded" | "fileRemoved" | "fileContentsSet" | "translationUnitAdded" | "translationUnitRemoved" | "translationUnitStatusSet" | "noteAdded";
+declare type ProjectMessages = "nameSet" | "compilationOutOfDate" | "compilationFinished" | "fileAdded" | "fileRemoved" | "fileContentsSet" | "translationUnitAdded" | "translationUnitRemoved" | "translationUnitStatusSet" | "noteAdded" | "saveRequested";
 export declare class Project {
     observable: Observable<ProjectMessages>;
     readonly name: string;
@@ -46,6 +46,7 @@ export declare class Project {
     turnOnAutoCompile(autoCompileDelay?: number): this;
     turnOffAutoCompile(): this;
     addNote(note: Note): void;
+    requestSave(): void;
 }
 export declare type ExerciseMessages = "checkpointEvaluationStarted" | "checkpointEvaluationFinished" | "checkpointsChanged";
 export declare class Exercise {

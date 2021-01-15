@@ -179,13 +179,13 @@ export interface BlockASTNode extends ASTNode {
     readonly construct_type: "block";
     readonly statements: readonly StatementASTNode[];
 }
+export declare function createBlockContext(parentContext: FunctionContext): BlockContext;
 export declare class Block extends Statement<BlockASTNode> {
     readonly construct_type = "block";
     readonly statements: readonly Statement[];
     static createFromAST(ast: BlockASTNode, context: FunctionContext): Block;
-    constructor(context: FunctionContext, ast: BlockASTNode);
+    constructor(context: BlockContext, ast: BlockASTNode, statements: readonly Statement[]);
     isBlock(): this is Block;
-    addStatement(statement: Statement): void;
     createDefaultOutlet(this: CompiledBlock, element: JQuery, parent?: ConstructOutlet): BlockOutlet;
 }
 export interface CompiledBlock extends Block, SuccessfullyCompiled {
