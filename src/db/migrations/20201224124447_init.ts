@@ -7,6 +7,9 @@ export async function up(knex: Knex): Promise<void> {
       table.string("email", 50).notNullable();
       table.string("name", 100).notNullable();
       table.boolean("is_super").notNullable().defaultTo(false);
+
+      table.index("id");
+      table.index("email");
     })
     .createTable("courses", table => {
       table.increments("id").primary();
@@ -14,6 +17,8 @@ export async function up(knex: Knex): Promise<void> {
       table.string("full_name", 100).notNullable();
       table.string("term", 6).notNullable();
       table.integer("year").notNullable();
+      
+      table.index("id");
     })
     .createTable("users_courses", table => {
       table.integer("user_id").unsigned().notNullable()
