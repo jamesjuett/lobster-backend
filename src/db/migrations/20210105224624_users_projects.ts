@@ -8,6 +8,8 @@ export async function up(knex: Knex): Promise<void> {
       table.integer("project_id").unsigned().notNullable()
         .references("id").inTable("projects").onDelete("cascade");
       table.primary(["user_id", "project_id"]);
+
+      table.index(["user_id", "project_id"]);
     });
 }
 

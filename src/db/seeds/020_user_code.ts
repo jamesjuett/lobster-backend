@@ -23,7 +23,7 @@ export async function seed(knex: Knex): Promise<void> {
     // Note - the old uniqname column actually contains emails
     let user = await getOrCreateUser(p.uniqname);
     assert(user, "failed to create user " + p.uniqname + ". that shouldn't happen :(");
-
+    
     await createUserProject(
       user.id,
       p.name,

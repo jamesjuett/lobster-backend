@@ -17,7 +17,7 @@ export async function up(knex: Knex): Promise<void> {
       table.string("full_name", 100).notNullable();
       table.string("term", 6).notNullable();
       table.integer("year").notNullable();
-      
+
       table.index("id");
     })
     .createTable("users_courses", table => {
@@ -27,10 +27,14 @@ export async function up(knex: Knex): Promise<void> {
         .references("id").inTable("courses").onDelete("cascade");
       table.boolean("is_admin").notNullable().defaultTo(false);
       table.primary(["user_id", "course_id"]);
+      
+      table.index(["user_id", "course_id"]);
     })
     .createTable("exercises", table => {
       table.increments("id").primary();
       table.string("exercise_key", 50).notNullable();
+
+      table.index("id");
     })
     .createTable("projects", table => {
       table.increments("id").primary();
@@ -38,6 +42,8 @@ export async function up(knex: Knex): Promise<void> {
         .references("id").inTable("exercises").onDelete("restrict");
       table.timestamp("last_modified").notNullable().defaultTo(knex.fn.now());
       table.text("contents").notNullable();
+
+      table.index("id");
     })
     .alterTable("exercises", table => {
       table.integer("starter_project_id").unsigned().nullable()
