@@ -32,7 +32,9 @@ auth_router
   .get("/google/callback",
     passport.authenticate("google", { session: false }),
     (req, res) => {
-      res.cookie("bearer", generateJwt((req.user as any).id));
+      res.cookie("bearer", generateJwt((req.user as any).id), {
+        secure: true
+      });
       res.redirect(302, "/");
       // res.sendStatus(302);
     }
