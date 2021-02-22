@@ -44335,15 +44335,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.EXERCISE_CHECKPOINTS = exports.getExerciseCheckpoints = exports.StaticAnalysisCheckpoint = exports.EndOfMainStateCheckpoint = exports.outputComparator = exports.OutputCheckpoint = exports.IsCompiledCheckpoint = exports.Checkpoint = void 0;
-const lodash_1 = __webpack_require__(6486);
-const errors_1 = __webpack_require__(5244);
-const predicates_1 = __webpack_require__(941);
+exports.StaticAnalysisCheckpoint = exports.EndOfMainStateCheckpoint = exports.outputComparator = exports.OutputCheckpoint = exports.removeWhitespace = exports.IsCompiledCheckpoint = exports.Checkpoint = void 0;
 const Simulation_1 = __webpack_require__(2295);
 const simulationRunners_1 = __webpack_require__(9108);
-const types_1 = __webpack_require__(8716);
-const analysis_1 = __webpack_require__(5431);
-const loops_1 = __webpack_require__(2327);
 class Checkpoint {
     constructor(name) {
         this.name = name;
@@ -44361,6 +44355,7 @@ exports.IsCompiledCheckpoint = IsCompiledCheckpoint;
 function removeWhitespace(str) {
     return str.replace(/\s+/g, '');
 }
+exports.removeWhitespace = removeWhitespace;
 // TODO: reduce duplication with EndOfMainStateCheckpoint
 class OutputCheckpoint extends Checkpoint {
     constructor(name, expected, input = "", stepLimit = 1000) {
@@ -44447,559 +44442,6 @@ class StaticAnalysisCheckpoint extends Checkpoint {
     }
 }
 exports.StaticAnalysisCheckpoint = StaticAnalysisCheckpoint;
-// export class TestCaseCheckpoint extends Checkpoint {
-//     public readonly input: string;
-//     public readonly stepLimit: number;
-//     private validTest: (assertion: MagicFunctionCallExpressionOutlet) => boolean;
-//     private runner?: AsynchronousSimulationRunner;
-//     public constructor(name: string, validTest: (output: string) => boolean, input: string = "", stepLimit: number = 1000) {
-//         super(name);
-//         this.validTest = validTest;
-//         this.input = input;
-//         this.stepLimit = stepLimit;
-//     }
-//     // May throw if interrupted during async running
-//     public async evaluate(project: Project) {
-//         if (this.runner) {
-//             this.runner.pause();
-//             delete this.runner;
-//         }
-//         let program = project.program;
-//         if (!program.isRunnable()) {
-//             return false;
-//         }
-//         let sim = new Simulation(program);
-//         if (this.input !== "") {
-//             sim.cin.addToBuffer(this.input)
-//         }
-//         let runner = this.runner = new AsynchronousSimulationRunner(sim);
-//         // may throw if interrupted
-//         await runner.stepToEnd(0, this.stepLimit, true);
-//         return sim.atEnd && this.expected(sim.allOutput);
-//     }
-// }
-function getExerciseCheckpoints(checkpoints_key) {
-    var _a;
-    if (typeof checkpoints_key === "string") {
-        return (_a = exports.EXERCISE_CHECKPOINTS[checkpoints_key]) !== null && _a !== void 0 ? _a : [];
-    }
-    else {
-        let checkpoints = [];
-        checkpoints_key.forEach(ck => { var _a; return (_a = exports.EXERCISE_CHECKPOINTS[ck]) === null || _a === void 0 ? void 0 : _a.forEach(c => checkpoints.push(c)); });
-        return checkpoints;
-    }
-}
-exports.getExerciseCheckpoints = getExerciseCheckpoints;
-exports.EXERCISE_CHECKPOINTS = {
-    "test_exercise_1": [
-        new StaticAnalysisCheckpoint("Declare x", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("x"));
-        }),
-        new StaticAnalysisCheckpoint("Use a for loop", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("for_statement"));
-        }),
-        new OutputCheckpoint("Print \"Hello World!\"", outputComparator("Hello World!", true))
-    ],
-    "test_exercise_2": [
-        new StaticAnalysisCheckpoint("Declare z", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("z"));
-        })
-    ],
-    "ch12_01_ex": [
-        new StaticAnalysisCheckpoint("Compute y", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("y"));
-        }),
-        new StaticAnalysisCheckpoint("Compute z", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("z"));
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output === "Hello World!\nThe result is 120!\n";
-        })
-    ],
-    "ch12_04_ex_stopwatch": [
-        new StaticAnalysisCheckpoint("Compute h", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("h"));
-        }),
-        new StaticAnalysisCheckpoint("Compute m", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("m"));
-        }),
-        new StaticAnalysisCheckpoint("Compute s", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("s"));
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output === "Hours: 1\nMinutes: 2\nSeconds: 33\n";
-        })
-    ],
-    "ch13_02_ex": [
-        new IsCompiledCheckpoint("Compiles"),
-        new StaticAnalysisCheckpoint("Start at 9", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(9));
-        }),
-        new StaticAnalysisCheckpoint("While Loop", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("while_statement"));
-        }),
-        new StaticAnalysisCheckpoint("Condition", (program) => {
-            let loopVar = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(9));
-            let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("while_statement"));
-            if (!loopVar || !loop) {
-                return false;
-            }
-            // verify loop condition contains the right variable
-            if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byIdentifierName(loopVar.name))) {
-                return false;
-            }
-            // verify loop condition contains a number
-            if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("numeric_literal_expression"))) {
-                return false;
-            }
-            // verify loop condition contains a relational operator
-            if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"))) {
-                return false;
-            }
-            return true;
-        }),
-        new StaticAnalysisCheckpoint("Update Expression", (program) => {
-            let loopVar = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(9));
-            let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("while_statement"));
-            if (!loopVar || !loop) {
-                return false;
-            }
-            // verify loop body contains an update for the var
-            return !!analysis_1.findFirstConstruct(loop.body, predicates_1.Predicates.byVariableUpdate(loopVar.name));
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output === "9 7 5 3 1 done!\n";
-        })
-    ],
-    "ch13_03_ex": [
-        new StaticAnalysisCheckpoint("Use ++", (program) => {
-            return !!analysis_1.findConstructs(program, predicates_1.Predicates.byKinds(["prefix_increment_expression", "postfix_increment_expression"])).find(construct => construct.operator === "++");
-        }),
-        new StaticAnalysisCheckpoint("Use --", (program) => {
-            return !!analysis_1.findConstructs(program, predicates_1.Predicates.byKinds(["prefix_increment_expression", "postfix_increment_expression"])).find(construct => construct.operator === "--");
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output === "0\n1\n2\n3\n4\n3\n2\n1\n0\ndone!\n";
-        })
-    ],
-    "ch13_04_ex": [
-        new StaticAnalysisCheckpoint("for Loop Syntax", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("for_statement"));
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output === "1 2 4 8 16 32 done!\n";
-        })
-    ],
-    "ch13_05_ex": [
-        new StaticAnalysisCheckpoint("Nested Loops", (program) => {
-            let outerLoop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKinds(["for_statement", "while_statement"]));
-            return !!outerLoop && !!analysis_1.findFirstConstruct(outerLoop.body, predicates_1.Predicates.byKinds(["for_statement", "while_statement"]));
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output === "X\nXX\nXXX\nXXXX\nXXXXX\n";
-        })
-    ],
-    "ch13_06_ex": [
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output === "1 5 7 11 13 done!\n";
-        })
-    ],
-    "ch13_06_ex_2": [
-    // no checkpoints, just an example not an exercise
-    ],
-    "ch14_03_ex": [
-        new OutputCheckpoint("Correct Output", (output) => {
-            return removeWhitespace(output) === removeWhitespace("X\nXX\nXXX\nXX\nX\n");
-        })
-    ],
-    "ch15_ex_echo": [
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output.indexOf("Hi") !== -1
-                && output.indexOf("How") !== -1
-                && output.indexOf("are") !== -1
-                && output.indexOf("you") !== -1
-                && output.indexOf("Stop") !== -1
-                && output.indexOf("Ok fine I'll stop :(") !== -1;
-        }, "Hi\nHow are you\nStop\nSTOP\n")
-    ],
-    "ch15_ex_repeat": [
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output.indexOf("abababab") !== -1
-                && output.indexOf("echo echo ") !== -1;
-        })
-    ],
-    "ch16_ex_printDoubled": [
-        new StaticAnalysisCheckpoint("Start at 0", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(0));
-        }),
-        new StaticAnalysisCheckpoint("Check against size", (program, project) => {
-            let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
-            if (!loop) {
-                return false;
-            }
-            // verify loop condition does NOT contain a number
-            let hardcodedLimit = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("numeric_literal_expression"));
-            if (hardcodedLimit) {
-                project.addNote(new errors_1.CompilerNote(loop.condition, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Uh oh! It looks like you've got a hardcoded number ${hardcodedLimit.value.rawValue} for the loop size. This might work for the test case in main, but what if the function was called on a different vector?`));
-                return false;
-            }
-            // verify loop condition contains a relational operator
-            if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"))) {
-                return false;
-            }
-            // if loop condition does not contain a call to vector.size() return false
-            if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byFunctionCallName("size"))) {
-                return false;
-            }
-            // tricky - don't look for subscript expressions, since with a vector it's actually
-            // an overloaded [] and we need to look for that as a function call
-            let indexingOperations = analysis_1.findConstructs(loop.body, predicates_1.Predicates.byOperatorOverloadCall("[]"));
-            // loop condition contains size (from before), but also has <= or >=
-            // and no arithmetic operators or pre/post increments that could make up for the equal to part
-            // (e.g. i <= v.size() is very much wrong, but i <= v.size() - 1 is ok)
-            let conditionOperator = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"));
-            if (conditionOperator) {
-                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKinds(["arithmetic_binary_operator_expression", "prefix_increment_expression", "postfix_increment_expression"]))) {
-                    if (conditionOperator.operator === "<=" || conditionOperator.operator === ">=") {
-                        if (!indexingOperations.some(indexingOp => analysis_1.findFirstConstruct(indexingOp, predicates_1.Predicates.byKinds([
-                            "arithmetic_binary_operator_expression",
-                            "prefix_increment_expression",
-                            "postfix_increment_expression"
-                        ])))) {
-                            project.addNote(new errors_1.CompilerNote(conditionOperator, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Double check the limit in this condition. I think there might be an off-by-one error that takes you out of bounds if you're using the ${conditionOperator.operator} operator.`));
-                            return false;
-                        }
-                    }
-                }
-            }
-            return true;
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output.indexOf("{ 84 84 10 84 }") !== -1;
-        })
-    ],
-    "ch16_ex_all_negative": [
-        new StaticAnalysisCheckpoint("Start at 0", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(0));
-        }),
-        new StaticAnalysisCheckpoint("Check against size", (program, project) => {
-            // Find a loop, either while or for
-            let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
-            if (!loop) {
-                return false;
-            }
-            // Give a specific hint if loop condition does contains a number
-            let hardcodedLimit = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("numeric_literal_expression"));
-            if (hardcodedLimit) {
-                project.addNote(new errors_1.CompilerNote(loop.condition, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Uh oh! It looks like you've got a hardcoded number ${hardcodedLimit.value.rawValue} for the loop size. This might work for the test case in main, but what if the function was called on a different vector?`));
-                return false;
-            }
-            // verify loop condition contains a relational operator
-            if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"))) {
-                return false;
-            }
-            // if loop condition does not contain a call to vector.size() return false
-            if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byFunctionCallName("size"))) {
-                return false;
-            }
-            // tricky - don't look for subscript expressions, since with a vector it's actually
-            // an overloaded [] and we need to look for that as a function call
-            let indexingOperations = analysis_1.findConstructs(loop.body, predicates_1.Predicates.byOperatorOverloadCall("[]"));
-            // loop condition contains size (from before), but also has <= or >=
-            // and no arithmetic operators or pre/post increments that could make up for the equal to part
-            // (e.g. i <= v.size() is very much wrong, but i <= v.size() - 1 is ok)
-            let conditionOperator = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"));
-            if (conditionOperator) {
-                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKinds(["arithmetic_binary_operator_expression", "prefix_increment_expression", "postfix_increment_expression"]))) {
-                    if (conditionOperator.operator === "<=" || conditionOperator.operator === ">=") {
-                        if (!indexingOperations.some(indexingOp => analysis_1.findFirstConstruct(indexingOp, predicates_1.Predicates.byKinds([
-                            "arithmetic_binary_operator_expression",
-                            "prefix_increment_expression",
-                            "postfix_increment_expression"
-                        ])))) {
-                            project.addNote(new errors_1.CompilerNote(conditionOperator, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Double check the limit in this condition. I think there might be an off-by-one error that takes you out of bounds if you're using the ${conditionOperator.operator} operator.`));
-                            return false;
-                        }
-                    }
-                }
-            }
-            return true;
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return removeWhitespace(output) === removeWhitespace("vec1 all negative? 0\nvec2 all negative? 0\nvec3 all negative? 1\n")
-                || removeWhitespace(output) === removeWhitespace("vec1 all negative? false\nvec2 all negative? false\nvec3 all negative? true\n");
-        })
-    ],
-    "ch17_ex_encrypt_word": [
-        // new StaticAnalysisCheckpoint("Local copy of text parameter", (program: Program) => {
-        //     let fn = findFirstConstruct(program, Predicates.byFunctionName("encrypt_word"));
-        //     let textParam = fn?.parameters.find(p => p.type?.isCompleteClassType() && p.type.className === "string");
-        //     let textParamName = textParam?.name;
-        //     if (!fn || !textParam || !textParamName) { return false; }
-        //     // find all local string variable definitions
-        //     let localStrings = findConstructs(fn, Predicates.byKind("local_variable_definition")).filter(
-        //         def => def.type.isCompleteClassType() && def.type.className === "string"
-        //     );
-        //     let stringAssignments = findConstructs(fn, Predicates.byKind("member_operator_overload_expression")).filter(
-        //         assn => assn.receiverExpression.type.className === "string"
-        //     );
-        //     // one of those either needs to be initialized with "text" parameter or
-        //     // later on assigned its value
-        //     return localStrings.some(s => s.initializer && containsConstruct(s.initializer, Predicates.byIdentifierName(textParamName!))) ||
-        //             stringAssignments.some(assn => containsConstruct(assn, Predicates.byVariableName(textParamName!)));
-        // }),
-        new StaticAnalysisCheckpoint("loop", (program) => {
-            let fn = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("encrypt_word"));
-            return !!fn && analysis_1.containsConstruct(fn, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
-        }),
-        new StaticAnalysisCheckpoint("Call shift_letter()", (program) => {
-            let fn = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("encrypt_word"));
-            let call = fn && analysis_1.findFirstConstruct(fn, predicates_1.Predicates.byFunctionCallName("shift_letter"));
-            return !!(call === null || call === void 0 ? void 0 : call.isSuccessfullyCompiled());
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output.indexOf("mjqqt") !== -1;
-        })
-    ],
-    "ch17_ex_unit_testing": [
-        new StaticAnalysisCheckpoint("Add 3 more test cases (6 total)", (program) => {
-            let main = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("main"));
-            if (!main) {
-                return false;
-            }
-            return analysis_1.findConstructs(main, predicates_1.Predicates.byKind("magic_function_call_expression")).filter(call => call.functionName === "assert").length >= 6;
-        })
-    ],
-    "ch18_ex_printRover": [
-        new StaticAnalysisCheckpoint("Print type", (program, project) => {
-            let printRover = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("printRover"));
-            if (!printRover) {
-                return false;
-            }
-            // Give a specific hint if they accidentally use cout in the function
-            let cout = analysis_1.findFirstConstruct(printRover, predicates_1.Predicates.byIdentifierName("cout"));
-            if (cout) {
-                project.addNote(new errors_1.CompilerNote(cout, errors_1.NoteKind.STYLE, "cout_in_ostream_function", `Oops! This is a very easy mistake to make, since we're all so used to typing cout. But printRover() takes in a particular ostream parameter called 'output', and you should make sure to send your output through that stream (in case it turns out to be different from cout).`));
-                return false;
-            }
-            return analysis_1.findConstructs(printRover, predicates_1.Predicates.byKind("output_operator_expression")).some(operator => operator.operator === "<<" && analysis_1.containsConstruct(operator.right, predicates_1.Predicates.byMemberAccessName("type")));
-        }),
-        new StaticAnalysisCheckpoint("Print id", (program) => {
-            let printRover = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("printRover"));
-            if (!printRover) {
-                return false;
-            }
-            return analysis_1.findConstructs(printRover, predicates_1.Predicates.byKind("non_member_operator_overload_expression")).some(operator => operator.operator === "<<" && analysis_1.containsConstruct(operator, predicates_1.Predicates.byMemberAccessName("id")));
-        }),
-        new StaticAnalysisCheckpoint("Print charge", (program) => {
-            let printRover = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("printRover"));
-            if (!printRover) {
-                return false;
-            }
-            return analysis_1.findConstructs(printRover, predicates_1.Predicates.byKind("output_operator_expression")).some(operator => operator.operator === "<<" && analysis_1.containsConstruct(operator.right, predicates_1.Predicates.byMemberAccessName("charge")));
-        }),
-        new OutputCheckpoint("Correct Output (and formatting)", (output) => {
-            return removeWhitespace(output) === removeWhitespace("Type 1 Rover #a238 (80%)");
-        })
-    ],
-    "ch19_ex_printVecOfInts": [
-        new StaticAnalysisCheckpoint("Start at 0", (program) => {
-            return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(0));
-        }),
-        new StaticAnalysisCheckpoint("Check against size", (program, project) => {
-            let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
-            if (!loop) {
-                return false;
-            }
-            // verify loop condition does NOT contain a number
-            let hardcodedLimit = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("numeric_literal_expression"));
-            if (hardcodedLimit) {
-                project.addNote(new errors_1.CompilerNote(loop.condition, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Uh oh! It looks like you've got a hardcoded number ${hardcodedLimit.value.rawValue} for the loop size. This might work for the test case in main, but what if the function was called on a different vector?`));
-                return false;
-            }
-            // verify loop condition contains a relational operator
-            if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"))) {
-                return false;
-            }
-            // if loop condition does not contain a call to vector.size() return false
-            if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byFunctionCallName("size"))) {
-                return false;
-            }
-            // tricky - don't look for subscript expressions, since with a vector it's actually
-            // an overloaded [] and we need to look for that as a function call
-            let indexingOperations = analysis_1.findConstructs(loop.body, predicates_1.Predicates.byOperatorOverloadCall("[]"));
-            // loop condition contains size (from before), but also has <= or >=
-            // and no arithmetic operators or pre/post increments that could make up for the equal to part
-            // (e.g. i <= v.size() is very much wrong, but i <= v.size() - 1 is ok)
-            let conditionOperator = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"));
-            if (conditionOperator) {
-                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKinds(["arithmetic_binary_operator_expression", "prefix_increment_expression", "postfix_increment_expression"]))) {
-                    if (conditionOperator.operator === "<=" || conditionOperator.operator === ">=") {
-                        if (!indexingOperations.some(indexingOp => analysis_1.findFirstConstruct(indexingOp, predicates_1.Predicates.byKinds([
-                            "arithmetic_binary_operator_expression",
-                            "prefix_increment_expression",
-                            "postfix_increment_expression"
-                        ])))) {
-                            project.addNote(new errors_1.CompilerNote(conditionOperator, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Double check the limit in this condition. I think there might be an off-by-one error that takes you out of bounds if you're using the ${conditionOperator.operator} operator.`));
-                            return false;
-                        }
-                    }
-                }
-            }
-            return true;
-        }),
-        new OutputCheckpoint("Correct Output", (output) => {
-            return removeWhitespace(output).indexOf(removeWhitespace("{ 1 2 3 4 5 }")) !== -1
-                && removeWhitespace(output).indexOf(removeWhitespace("{ 0 -5 94 16 }")) !== -1;
-        })
-    ],
-    "eecs280_ex_swap_by_pointer": [
-        new OutputCheckpoint("Correct Output", (output) => {
-            return output.indexOf("a = 5") !== -1
-                && output.indexOf("b = 3") !== -1;
-        })
-    ],
-    "loop_control_vars": [
-        new OutputCheckpoint("Checking Loops", (output) => {
-            return true;
-        })
-    ],
-    "eecs280_ex_strcpy": [
-        new OutputCheckpoint("Correct Output", (output, project) => {
-            if (output.indexOf("frogrd") !== -1) {
-                let strcpyFn = analysis_1.findFirstConstruct(project.program, predicates_1.Predicates.byFunctionName("strcpy"));
-                if (strcpyFn) {
-                    project.addNote(new errors_1.CompilerNote(strcpyFn.declaration.declarator, errors_1.NoteKind.STYLE, "hint_strcpy_null_char", `Hint: It looks like you're quite close to the right answer! Check out the simulation output. What gets printed? How does that relate to the placement of the null characters in memory?`));
-                }
-                return false;
-            }
-            let first = output.indexOf("frog");
-            if (first === -1) {
-                return false;
-            }
-            let second = output.indexOf("frog", first + 1);
-            return second !== -1;
-        })
-    ],
-    "eecs280_ex_lab2_squareArray": [
-        new StaticAnalysisCheckpoint("Traversal by Index", (program, project) => {
-            let squareArrayFn = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("squareArray"));
-            if (!squareArrayFn) {
-                return false;
-            }
-            // let arrParam = squareArrayFn.parameters[0];
-            // if (!Predicates.isTypedDeclaration(arrParam, isPointerToType(Int))) {
-            //     return false;
-            // }
-            // let lenParam = squareArrayFn.parameters[1];
-            // if (!Predicates.isTypedDeclaration(lenParam, isType(Int))) {
-            //     return false;
-            // }
-            let loop = analysis_1.findFirstConstruct(squareArrayFn, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
-            if (!loop) {
-                return false;
-            }
-            let loopControlVars = loops_1.findLoopControlVars(loop);
-            return loopControlVars.some(v => v.isTyped(types_1.isIntegralType));
-            // // verify loop condition contains a relational operator
-            // let conditionOk = false;
-            // let loopCondComp = findFirstConstruct(loop.condition, Predicates.byKind("relational_binary_operator_expression"));
-            // if (loopCondComp) {
-            //     let compOperands = <AnalyticExpression[]>[loopCondComp.left, loopCondComp.right];
-            //     if (compOperands.every(Predicates.byTypedExpression(isType(Int)))) {
-            //         let hardcodedLimit = findFirstConstruct(loop.condition, Predicates.byKind("numeric_literal_expression"));
-            //         if (hardcodedLimit) {
-            //             project.addNote(new CompilerNote(loop.condition, NoteKind.STYLE, "hardcoded_vector_size",
-            //             `Uh oh! It looks like you've got a hardcoded number ${hardcodedLimit.value.rawValue} for the loop size. This might work for the test case in main, but what if the function was called on a different vector?`));
-            //             return false;
-            //         }
-            //         else {
-            //             conditionOk = true;
-            //         }
-            //     }
-            //     else {
-            //         project.addNote(new CompilerNote(loop.condition, NoteKind.STYLE, "traversal_by_index_condition",
-            //         `For traversal by index, make sure  This might work for the test case in main, but what if the function was called on a different vector?`));
-            //     }
-            // }
-            // // if loop condition does not contain a call to vector.size() return false
-            // if (!findFirstConstruct(loop.condition, Predicates.byFunctionCallName("size"))) {
-            //     return false;
-            // }
-            // // tricky - don't look for subscript expressions, since with a vector it's actually
-            // // an overloaded [] and we need to look for that as a function call
-            // let indexingOperations = findConstructs(loop.body, Predicates.byOperatorOverloadCall("[]"));
-            // // loop condition contains size (from before), but also has <= or >=
-            // // and no arithmetic operators or pre/post increments that could make up for the equal to part
-            // // (e.g. i <= v.size() is very much wrong, but i <= v.size() - 1 is ok)
-            // let conditionOperator = findFirstConstruct(loop.condition, Predicates.byKind("relational_binary_operator_expression"));
-            // if (conditionOperator){
-            //     if (!findFirstConstruct(loop.condition,
-            //         Predicates.byKinds(["arithmetic_binary_operator_expression", "prefix_increment_expression", "postfix_increment_expression"]))) {
-            //         if (conditionOperator.operator === "<=" || conditionOperator.operator === ">=") {
-            //             if (!indexingOperations.some(indexingOp => findFirstConstruct(indexingOp,
-            //                 Predicates.byKinds([
-            //                     "arithmetic_binary_operator_expression",
-            //                     "prefix_increment_expression",
-            //                     "postfix_increment_expression"])
-            //                 ))) {
-            //                     project.addNote(new CompilerNote(conditionOperator, NoteKind.STYLE, "hardcoded_vector_size",
-            //                         `Double check the limit in this condition. I think there might be an off-by-one error that takes you out of bounds if you're using the ${conditionOperator.operator} operator.`));
-            //                     return false;
-            //                 }
-            //         }
-            //     }
-            // }
-        }),
-        new StaticAnalysisCheckpoint("Traversal by Pointer", (program, project) => {
-            let squareArrayFn = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("squareArray"));
-            if (!squareArrayFn) {
-                return false;
-            }
-            let loop = analysis_1.findFirstConstruct(squareArrayFn, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
-            if (!loop) {
-                return false;
-            }
-            let loopControlVars = loops_1.findLoopControlVars(loop);
-            return loopControlVars.some(v => v.isTyped(types_1.isPointerType));
-        }),
-        new EndOfMainStateCheckpoint("arr modified to {16, 25, 4}", (sim) => {
-            let main = sim.program.mainFunction;
-            let arrEntity = main.context.functionLocals.localObjects.find(local => local.name === "arr");
-            if (!arrEntity) {
-                return false;
-            }
-            let mainFrame = sim.memory.stack.topFrame();
-            let arr = mainFrame.localObjectLookup(arrEntity);
-            if (!arr.isTyped(types_1.isBoundedArrayOfType(types_1.isType(types_1.Int)))) {
-                return false;
-            }
-            let elts = arr.rawValue();
-            return lodash_1.isEqual(elts, [16, 25, 4]);
-        })
-        // new EndOfMainStateCheckpoint("Correct Output", (sim: Simulation) => {
-        //     let main = sim.program.mainFunction;
-        //     let mainFrame = sim.memory.stack.topFrame()!;
-        //     let locals = sim.program.mainFunction.context.functionLocals.localObjects.map(local => local.firstDeclaration);
-        //     let localArrays = locals.filter(Predicates.byTypedDeclaration(isBoundedArrayOfType(isType(Int))));
-        //     let squareArrayCalls = findConstructs(main, Predicates.byFunctionCallName("squareArray"));
-        //     // Filter to only those localArrays that appear in exactly one call to squareArray
-        //     localArrays = localArrays.filter(localArr => !!findFirstConstruct(squareArrayCalls, Predicates.byIdentifierName(localArr.name)))
-        //     return localArrays.every(localArr => {
-        //         if (!))
-        //     });
-        //     // if (!arrEntity || !(arrEntity instanceof LocalObjectEntity)) {
-        //     //     return false;
-        //     // }
-        //     // let arr = mainFrame.localObjectLookup(arrEntity);
-        //     // if (!arr.isTyped(isBoundedArrayOfType(isType(Int)))) {
-        //     //     return false;
-        //     // }
-        //     // let elts = arr.rawValue();
-        //     // return isEqual(elts, [])
-        // })
-    ],
-};
 
 
 /***/ }),
@@ -45506,7 +44948,7 @@ class FunctionCall extends PotentialFullExpression {
         // Note - destructors are allowed to ignore const semantics.
         // That is, even though a destructor is a non-const member function,
         // it is allowed to be called on const objects and suspends their constness
-        if (this.func.isMemberFunction() && !this.func.firstDeclaration.isDestructor
+        if (this.func.isMemberFunction && !this.func.isDestructor
             && (receiverType === null || receiverType === void 0 ? void 0 : receiverType.isConst) && !((_a = this.func.type.receiverType) === null || _a === void 0 ? void 0 : _a.isConst)) {
             this.addNote(errors_1.CPPError.param.thisConst(this, receiverType));
         }
@@ -45628,7 +45070,9 @@ class RuntimeFunctionCall extends RuntimePotentialFullExpression {
         // Basically, the assumption depends on a RuntimeFunctionCall only being created
         // if the program was successfully linked (which also implies the FunctionDefinition was compiled)
         // It also assumes the function definition has the correct return type.
-        let functionDef = this.model.func.definition;
+        // Note that the cast to a CompiledFunctionDefinition with return type T is fine w.r.t.
+        // covariant return types because T can't ever be more specific than just "a class type".
+        let functionDef = this.model.func.getDynamicallyBoundFunction(receiver);
         // Create argument initializer instances
         this.argInitializers = this.model.argInitializers.map((aInit) => aInit.createRuntimeInitializer(this));
         // TODO: TCO? would reuse this.containingRuntimeFunction instead of creating new
@@ -45737,6 +45181,9 @@ class Program {
         // Note that the definition provided might not match at all or might
         // be undefined if there was no match for the qualified name. The entities
         // will take care of adding the appropriate linker errors in these cases.
+        // Note that "multiple definition" errors are handled when the definitions
+        // are registered with the program, so we don't have to take care of them
+        // here and thus don't even call "link" if there was a previous definition.
         this.linkedObjectEntities.forEach(le => { var _a; return (_a = le.definition) !== null && _a !== void 0 ? _a : le.link(this.linkedObjectDefinitions[le.qualifiedName]); });
         this.linkedFunctionEntities.forEach(le => { var _a; return (_a = le.definition) !== null && _a !== void 0 ? _a : le.link(this.linkedFunctionDefinitions[le.qualifiedName]); });
         this.linkedClassEntities.forEach(le => { var _a; return (_a = le.definition) !== null && _a !== void 0 ? _a : le.link(this.linkedClassDefinitions[le.qualifiedName]); });
@@ -46256,7 +45703,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Exercise = exports.Project = void 0;
+exports.Exercise = exports.COMPLETION_ALL_CHECKPOINTS = exports.COMPLETION_LAST_CHECKPOINT = exports.Project = void 0;
 const observe_1 = __webpack_require__(5114);
 const util_1 = __webpack_require__(6560);
 const Program_1 = __webpack_require__(5386);
@@ -46412,20 +45859,31 @@ class Project {
     }
 }
 exports.Project = Project;
+const COMPLETION_LAST_CHECKPOINT = (ex) => ex.checkpointCompletions[ex.checkpoints.length - 1];
+exports.COMPLETION_LAST_CHECKPOINT = COMPLETION_LAST_CHECKPOINT;
+const COMPLETION_ALL_CHECKPOINTS = (ex) => ex.checkpointCompletions.every(status => status);
+exports.COMPLETION_ALL_CHECKPOINTS = COMPLETION_ALL_CHECKPOINTS;
 class Exercise {
-    constructor(checkpoints) {
+    constructor(spec) {
         this.observable = new observe_1.Observable(this);
-        this.checkpoints = checkpoints;
-        this.checkpointStatuses = checkpoints.map(c => false);
+        this.checkpoints = spec.checkpoints;
+        this.checkpointEvaluationsFinished = this.checkpoints.map(c => false);
+        this.checkpointCompletions = this.checkpoints.map(c => false);
+        this.completionCriteria = spec.completionCriteria;
+        this.completionMessage = spec.completionMessage;
     }
     setProject(project) {
         util_1.assert(!this.project);
         this.project = project;
         return this;
     }
-    setCheckpoints(checkpoints) {
-        this.checkpoints = checkpoints;
-        this.observable.send("checkpointsChanged", this);
+    changeSpecification(spec) {
+        util_1.asMutable(this).checkpoints = spec.checkpoints;
+        util_1.asMutable(this).checkpointEvaluationsFinished = this.checkpoints.map(c => false);
+        util_1.asMutable(this).checkpointCompletions = this.checkpoints.map(c => false);
+        this.completionCriteria = spec.completionCriteria;
+        util_1.asMutable(this).completionMessage = spec.completionMessage;
+        this.observable.send("exerciseChanged", this);
         this.update();
     }
     update() {
@@ -46436,17 +45894,25 @@ class Exercise {
     evaluateCheckpoints() {
         return __awaiter(this, void 0, void 0, function* () {
             util_1.assert(this.project);
-            this.observable.send("checkpointEvaluationStarted", this);
-            this.checkpointStatuses = yield Promise.all(this.checkpoints.map((checkpoint, i) => __awaiter(this, void 0, void 0, function* () {
+            util_1.asMutable(this).checkpointEvaluationsFinished = this.checkpoints.map(c => false);
+            this.observable.send("allCheckpointEvaluationStarted", this);
+            this.checkpointCompletions = yield Promise.all(this.checkpoints.map((checkpoint, i) => __awaiter(this, void 0, void 0, function* () {
                 try {
-                    return yield checkpoint.evaluate(this.project);
+                    let result = yield checkpoint.evaluate(this.project);
+                    util_1.asMutable(this.checkpointEvaluationsFinished)[i] = true;
+                    util_1.asMutable(this.checkpointCompletions)[i] = result;
+                    this.observable.send("checkpointEvaluationFinished", this);
+                    return result;
                 }
                 catch (_a) {
                     return false; // TODO: this results in a false when interrupted - maybe I should let the interruption propagate?
                 }
             })));
-            this.observable.send("checkpointEvaluationFinished", this);
+            this.observable.send("allCheckpointEvaluationFinished", this);
         });
+    }
+    get isComplete() {
+        return this.completionCriteria(this);
     }
 }
 exports.Exercise = Exercise;
@@ -47086,6 +46552,7 @@ function createClassContext(parentContext, classEntity, baseClass, templateType)
     var _a;
     return Object.assign({}, parentContext, {
         contextualScope: new entities_1.ClassScope(parentContext.translationUnit, classEntity.name, parentContext.contextualScope, (_a = baseClass === null || baseClass === void 0 ? void 0 : baseClass.definition) === null || _a === void 0 ? void 0 : _a.context.contextualScope),
+        baseClass: baseClass,
         containingClass: classEntity,
         templateType: templateType
     });
@@ -47819,6 +47286,7 @@ function test() {
 }
 class SimpleDeclaration extends constructs_1.BasicCPPConstruct {
     constructor(context, ast, typeSpec, storageSpec, declarator, otherSpecs) {
+        var _a;
         super(context, ast);
         this.attach(this.typeSpecifier = typeSpec);
         this.attach(this.storageSpecifier = storageSpec);
@@ -47828,10 +47296,13 @@ class SimpleDeclaration extends constructs_1.BasicCPPConstruct {
         if (!declarator.name) {
             return util_1.assertFalse("Simple declarations must have a name.");
         }
-        // None of the simple declarations are member function declarations
-        // and thus none support the virtual keyword
         if (otherSpecs.virtual) {
-            this.addNote(errors_1.CPPError.declaration.virtual_prohibited(this));
+            if (((_a = declarator.type) === null || _a === void 0 ? void 0 : _a.isFunctionType()) && constructs_1.isClassContext(context)) {
+                // ok, it's a member function
+            }
+            else {
+                this.addNote(errors_1.CPPError.declaration.virtual_prohibited(this));
+            }
         }
     }
 }
@@ -47896,12 +47367,47 @@ class UnknownBoundArrayDeclaration extends SimpleDeclaration {
 exports.UnknownBoundArrayDeclaration = UnknownBoundArrayDeclaration;
 class FunctionDeclaration extends SimpleDeclaration {
     constructor(context, ast, typeSpec, storageSpec, declarator, otherSpecs, type) {
-        var _a;
+        var _a, _b;
         super(context, ast, typeSpec, storageSpec, declarator, otherSpecs);
         this.construct_type = "function_declaration";
+        this.isMemberFunction = false;
+        this.isVirtual = false;
+        this.isPureVirtual = false;
+        this.isOverride = false;
+        this.isConstructor = false;
+        this.isDestructor = false;
         this.type = type;
-        this.isConstructor = this.declarator.hasConstructorName;
-        this.isDestructor = this.declarator.hasDestructorName;
+        let overrideTarget;
+        let containingClass;
+        if (constructs_1.isClassContext(context)) {
+            containingClass = context.containingClass;
+            this.isMemberFunction = true;
+            this.isVirtual = !!otherSpecs.virtual;
+            this.isPureVirtual = !!declarator.isPureVirtual;
+            this.isOverride = !!declarator.isOverride;
+            this.isConstructor = this.declarator.hasConstructorName;
+            this.isDestructor = this.declarator.hasDestructorName;
+            // Check to see if virtual is inherited
+            let base = (_a = context.baseClass) === null || _a === void 0 ? void 0 : _a.type;
+            while (base) {
+                let matchInBase = base.classDefinition.memberFunctionEntities.find(baseFunc => this.name === baseFunc.name && this.type.isPotentialOverriderOf(baseFunc.type));
+                if (matchInBase === null || matchInBase === void 0 ? void 0 : matchInBase.isVirtual) {
+                    this.isVirtual = true;
+                    // Check to make sure that the return types are covariant
+                    if (types_1.covariantType(this.type.returnType, matchInBase.type.returnType)) {
+                        overrideTarget = matchInBase;
+                        break;
+                    }
+                    else {
+                        this.addNote(errors_1.CPPError.declaration.func.nonCovariantReturnType(this, this.type.returnType, matchInBase.type.returnType));
+                    }
+                }
+                base = base.classDefinition.baseClass;
+            }
+        }
+        if (this.isOverride && !overrideTarget) {
+            this.addNote(errors_1.CPPError.declaration.func.noOverrideTarget(this));
+        }
         this.declaredEntity = new entities_1.FunctionEntity(type, this);
         util_1.assert(!!this.declarator.parameters, "The declarator for a function declaration must contain declarators for its parameters as well.");
         this.parameterDeclarations = this.declarator.parameters;
@@ -47913,17 +47419,29 @@ class FunctionDeclaration extends SimpleDeclaration {
         if (this.isConstructor) {
             // constructors are not added to their scope. they technically "have no name"
             // and can't be found through name lookup
-            if ((_a = this.type.receiverType) === null || _a === void 0 ? void 0 : _a.isConst) {
+            if ((_b = this.type.receiverType) === null || _b === void 0 ? void 0 : _b.isConst) {
                 this.addNote(errors_1.CPPError.declaration.ctor.const_prohibited(this));
             }
             if (this.declarator.baseType) {
                 this.addNote(errors_1.CPPError.declaration.ctor.return_type_prohibited(this));
             }
+            if (otherSpecs.virtual) { // use otherSpecs here since this.isVirtual depends on being a member fn
+                this.addNote(errors_1.CPPError.declaration.ctor.virtual_prohibited(this));
+            }
         }
         else {
             let entityOrError = this.context.contextualScope.declareFunctionEntity(this.declaredEntity);
             if (entityOrError instanceof entities_1.FunctionEntity) {
-                this.declaredEntity = entityOrError;
+                let actualDeclaredEntity = entityOrError;
+                if (actualDeclaredEntity === this.declaredEntity) {
+                    // if our newly declared entity actually got added to the scope
+                    // (and we didn't get returned a different one that was already there)
+                    if (overrideTarget) {
+                        overrideTarget.registerOverrider(containingClass, actualDeclaredEntity);
+                        actualDeclaredEntity.setOverrideTarget(overrideTarget);
+                    }
+                }
+                this.declaredEntity = actualDeclaredEntity;
             }
             else {
                 this.addNote(entityOrError);
@@ -48124,6 +47642,9 @@ class Declarator extends constructs_1.BasicCPPConstruct {
         // let isMember = isA(this.parent, Declarations.Member);
         if (ast.pureVirtual) {
             this.isPureVirtual = true;
+        }
+        if (ast.override) {
+            this.isOverride = true;
         }
         this.determineNameAndType(ast);
     }
@@ -48376,7 +47897,12 @@ class FunctionDefinition extends constructs_1.BasicCPPConstruct {
             declaration = decl;
         }
         // Create implementation and body block (before params and body statements added yet)
-        let functionContext = constructs_1.createFunctionContext(context, declaration.declaredEntity, (_a = context.containingClass) === null || _a === void 0 ? void 0 : _a.type);
+        let receiverType;
+        if (declaration.isMemberFunction) {
+            util_1.assert((_a = context.containingClass) === null || _a === void 0 ? void 0 : _a.isComplete(), "Member function definitions may not be compiled until their containing class definition has been completed.");
+            receiverType = context.containingClass.type;
+        }
+        let functionContext = constructs_1.createFunctionContext(context, declaration.declaredEntity, receiverType);
         let bodyContext = constructs_1.createBlockContext(functionContext);
         // Add declared entities from the parameters to the body block's context.
         // As the context refers back to the implementation, local objects/references will be registerd there.
@@ -48474,10 +48000,11 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         this.construct_type = "class_definition";
         this.memberDeclarationsByName = {};
         this.constructorDeclarations = [];
+        this.memberFunctionEntities = [];
         this.memberVariableEntities = [];
         this.memberObjectEntities = [];
         this.memberReferenceEntities = [];
-        this.memberEntitiesByName = {};
+        this.memberVariableEntitiesByName = {};
         this.inlineMemberFunctionDefinitions = [];
         this.name = declaration.name;
         this.implicitPublicContext = constructs_1.createImplicitContext(constructs_1.createMemberSpecificationContext(context, "public"));
@@ -48491,7 +48018,7 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         }
         this.attachAll(this.memberDeclarations = memberDeclarations);
         // Identify member objects and member references
-        this.memberDeclarations.forEach(decl => {
+        memberDeclarations.forEach(decl => {
             if (decl.construct_type === "member_variable_declaration") {
                 util_1.asMutable(this.memberVariableEntities).push(decl.declaredEntity);
                 if (decl.declaredEntity instanceof entities_1.MemberObjectEntity) {
@@ -48505,8 +48032,13 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
                 // Here we only record the first one we find.
                 if (!this.memberDeclarationsByName[decl.name]) {
                     this.memberDeclarationsByName[decl.name] = decl;
-                    this.memberEntitiesByName[decl.name] = decl.declaredEntity;
+                    this.memberVariableEntitiesByName[decl.name] = decl.declaredEntity;
                 }
+            }
+            else if (decl.construct_type === "function_declaration") {
+                // Note that only identifying function declarations and NOT definitions
+                // in here is intentional
+                util_1.asMutable(this.memberFunctionEntities).push(decl.declaredEntity);
             }
         });
         // CONSTRUCTORS and DESTRUCTOR
@@ -48583,7 +48115,15 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         // entity it refers to is looked up without regard to what follows in the class.
         // (And if it were dependent on the class scope, which is dependent on the base
         // class scope, etc. there's circular problems.)
-        let bases = ast.head.bases.map(baseAST => BaseSpecifier.createFromAST(baseAST, tuContext, defaultAccessLevel));
+        let bases = ast.head.bases.map(baseAST => {
+            let base = BaseSpecifier.createFromAST(baseAST, tuContext, defaultAccessLevel);
+            if (base.isSuccessfullyCompiled()) {
+                return base;
+            }
+            else {
+                return undefined;
+            }
+        }).filter(base => base);
         let declaration = new ClassDeclaration(tuContext, ast.head.name.identifier, classKey);
         if (declaration.declaredEntity.isComplete()) {
             return declaration.declaredEntity.definition;
@@ -49367,6 +48907,7 @@ const types_1 = __webpack_require__(8716);
 const util_1 = __webpack_require__(6560);
 const observe_1 = __webpack_require__(5114);
 const constructs_1 = __webpack_require__(4293);
+const objects_1 = __webpack_require__(697);
 const errors_1 = __webpack_require__(5244);
 class Scope {
     constructor(translationUnit, parent) {
@@ -50252,7 +49793,7 @@ class MemberObjectEntity extends MemberVariableEntityBase {
     }
     runtimeLookup(rtConstruct) {
         // Cast below should be <CPPObject<T>>, NOT MemberSubobject<T>.
-        // See return type and documentation for getMemberSubobject()
+        // See return type and documentation for getMemberObject()
         return rtConstruct.contextualReceiver.getMemberObject(this.name);
     }
     isTyped(predicate) {
@@ -50312,18 +49853,29 @@ class TemporaryObjectEntity extends CPPEntity {
 }
 exports.TemporaryObjectEntity = TemporaryObjectEntity;
 TemporaryObjectEntity._name = "TemporaryObjectEntity";
+let FE_overrideID = 0;
 class FunctionEntity extends DeclaredEntityBase {
     // storage: "static",
     constructor(type, decl) {
         super(type, decl.name);
         this.declarationKind = "function";
         this.isOdrUsed = false;
+        this.overriders = {};
         this.firstDeclaration = decl;
         this.declarations = [decl];
+        this.isMemberFunction = decl.isMemberFunction;
+        this.isVirtual = decl.isVirtual;
+        this.isPureVirtual = false;
         this.isConstructor = decl.isConstructor;
+        this.isDestructor = decl.isDestructor;
         this.qualifiedName = "::" + this.name;
         this.isImplicit = !!decl.context.implicit;
         this.isUserDefined = !decl.context.implicit;
+        this.overrideID = FE_overrideID++;
+        if (this.isMemberFunction) {
+            util_1.assert(constructs_1.isClassContext(decl.context));
+            this.overriders[decl.context.containingClass.qualifiedName] = this;
+        }
     }
     addDeclaration(decl) {
         util_1.asMutable(this.declarations).push(decl);
@@ -50331,15 +49883,39 @@ class FunctionEntity extends DeclaredEntityBase {
     addDeclarations(decls) {
         decls.forEach((decl) => util_1.asMutable(this.declarations).push(decl));
     }
-    isStaticallyBound() {
-        return true;
-    }
-    get isVirtual() {
-        return false;
-    }
     toString() {
         return this.name;
     }
+    registerOverrider(containingClass, overrider) {
+        var _a;
+        this.overriders[containingClass.qualifiedName] = overrider;
+        (_a = this.overrideTarget) === null || _a === void 0 ? void 0 : _a.registerOverrider(containingClass, overrider);
+    }
+    setOverrideTarget(target) {
+        util_1.assert(!this.overrideTarget, "A single FunctionEntity may not have multiple override targets.");
+        util_1.asMutable(this).overrideTarget = target;
+    }
+    // private checkForOverride(baseClass: ClassDefinition) {
+    //     baseClass.memberFunctionEntities.forEach(func => {
+    //         if (func.type.sameSignature(this.type)) {
+    //             func.registerOverrider(this);
+    //         }
+    //     })
+    //     // Find the nearest overrider of a hypothetical virtual function.
+    //     // If any are virtual, this one would have already been set to be
+    //     // also virtual by this same procedure, so checking this one is sufficient.
+    //     // If we override any virtual function, this one is too.
+    //     var overridden = this.containingClass.getBaseClass().classScope.singleLookup(this.name, {
+    //         paramTypes: this.type.paramTypes, isThisConst: this.type.isThisConst,
+    //         exactMatch:true, own:true, noNameHiding:true});
+    //     if (overridden && overridden instanceof FunctionEntity && overridden.isVirtual){
+    //         (<boolean>this.isVirtual) = true;
+    //         // Check to make sure that the return types are covariant
+    //         if (!covariantType(this.type.returnType, overridden.type.returnType)){
+    //             throw SemanticExceptions.NonCovariantReturnTypes.instance(this, overridden);
+    //         }
+    //     }
+    // }
     mergeInto(overloadGroup) {
         var _a;
         //check each other function found
@@ -50392,16 +49968,38 @@ class FunctionEntity extends DeclaredEntityBase {
             this.definition = overload;
         }
         else {
-            if (this.isOdrUsed) {
+            if (this.isMemberFunction && this.isVirtual && !this.isPureVirtual) {
+                // All (non-pure) virtual functions must have a definition
+                this.declarations.forEach((decl) => decl.addNote(errors_1.CPPError.link.func.virtual_def_required(decl, this)));
+            }
+            else if (this.isOdrUsed) {
+                // Functions that are ODR-used must have a definition
                 this.declarations.forEach((decl) => decl.addNote(errors_1.CPPError.link.func.def_not_found(decl, this)));
             }
+            // Otherwise, it's ok for the function to not have a definition because it is never used
         }
     }
     isMain() {
         return this.qualifiedName === "::main";
     }
-    isMemberFunction() {
-        return constructs_1.isClassContext(this.firstDeclaration.context);
+    getDynamicallyBoundFunction(receiver) {
+        if (!this.isVirtual) {
+            util_1.assert(this.definition, "non virtual function must have a definition!");
+            return this.definition;
+        }
+        else {
+            util_1.assert(receiver, "virtual function dynamic binding requires a receiver");
+            while (receiver instanceof objects_1.BaseSubobject) {
+                receiver = receiver.containingObject;
+            }
+            let dynamicType = receiver.type;
+            let finalOverrider;
+            while (!finalOverrider && dynamicType) {
+                finalOverrider = this.overriders[dynamicType.qualifiedName];
+                dynamicType = dynamicType.classDefinition.baseClass;
+            }
+            return (finalOverrider === null || finalOverrider === void 0 ? void 0 : finalOverrider.definition) || this.definition;
+        }
     }
     registerCall(call) {
         this.isOdrUsed = true;
@@ -50430,7 +50028,7 @@ class ClassEntity extends DeclaredEntityBase {
         // classes with external linkage, it is sufficient to use the fully qualified
         // class name to distinguish types from each other. But, because Lobster does
         // not support namespaces, the unqualified name is also sufficient.
-        super(types_1.createClassType(decl.name), decl.name);
+        super(types_1.createClassType(decl.name, "::" + decl.name), decl.name);
         this.declarationKind = "class";
         this.firstDeclaration = decl;
         this.declarations = [decl];
@@ -50519,25 +50117,6 @@ exports.ClassEntity = ClassEntity;
 //         // May also be set to virtual later if it's discovered to be an overrider
 //         // for a virtual function in a base class
 //         this.checkForOverride();
-//     }
-//     private checkForOverride() {
-//         if (!this.containingClass.getBaseClass()) {
-//             return;
-//         }
-//         // Find the nearest overrider of a hypothetical virtual function.
-//         // If any are virtual, this one would have already been set to be
-//         // also virtual by this same procedure, so checking this one is sufficient.
-//         // If we override any virtual function, this one is too.
-//         var overridden = this.containingClass.getBaseClass().classScope.singleLookup(this.name, {
-//             paramTypes: this.type.paramTypes, isThisConst: this.type.isThisConst,
-//             exactMatch:true, own:true, noNameHiding:true});
-//         if (overridden && overridden instanceof FunctionEntity && overridden.isVirtual){
-//             (<boolean>this.isVirtual) = true;
-//             // Check to make sure that the return types are covariant
-//             if (!covariantType(this.type.returnType, overridden.type.returnType)){
-//                 throw SemanticExceptions.NonCovariantReturnTypes.instance(this, overridden);
-//             }
-//         }
 //     }
 //     public isStaticallyBound() {
 //         return !this.isVirtual;
@@ -50875,6 +50454,9 @@ exports.CPPError = {
             const_prohibited: function (construct) {
                 return new CompilerNote(construct, NoteKind.ERROR, "declaration.ctor.const_prohibited", "A constructor is not allowed to have a const specification.");
             },
+            virtual_prohibited: function (construct) {
+                return new CompilerNote(construct, NoteKind.ERROR, "declaration.ctor.virtual_prohibited", "A constructor may not be declared as virtual.");
+            },
             previous_declaration: function (construct) {
                 return new CompilerNote(construct, NoteKind.ERROR, "declaration.ctor.previous_declaration", `Re-declaration of a constructor is not allowed (a previous declaration of a constructor with the same parameter types exists).`);
             },
@@ -50951,6 +50533,9 @@ exports.CPPError = {
             },
             nonCovariantReturnType: function (construct, derived, base) {
                 return new CompilerNote(construct, NoteKind.ERROR, "declaration.func.nonCovariantReturnType", "Return types in overridden virtual functions must either be the same or covariant (i.e. follow the Liskov Substitution Principle). Both return types must be pointers/references to class types, and the class type in the overriding function must be the same or a derived type. There are also restrictions on the cv-qualifications of the return types. In this case, returning a " + derived + " in place of a " + base + " violates covariance.");
+            },
+            noOverrideTarget: function (construct) {
+                return new CompilerNote(construct, NoteKind.ERROR, "declaration.func.noOverrideTarget", "This function is declared as an override, but there is no matching function in its base class(es) with a matching signature to override.");
             },
             definition_non_function_type: function (construct) {
                 return new CompilerNote(construct, NoteKind.ERROR, "declaration.func.definition_non_function_type", "This appears to be a function definition, but the declarator does not indicate a function type. Maybe you forgot the parentheses?");
@@ -51540,6 +51125,9 @@ exports.CPPError = {
             return new LinkerNote([newDef, prevDef], NoteKind.ERROR, "link.class_same_tokens", "Multiple class definitions are ok if they are EXACTLY the same in the source code. However, the multiple definitions found for " + newDef.name + " do not match exactly.");
         },
         func: {
+            virtual_def_required: function (construct, func) {
+                return new LinkerNote(construct, NoteKind.ERROR, "link.func.virtual_def_required", "Cannot find definition (i.e. the implementation code) for function " + func.name + ". Virtual functions must always have a definition.");
+            },
             def_not_found: function (construct, func) {
                 return new LinkerNote(construct, NoteKind.ERROR, "link.func.def_not_found", "Cannot find definition for function " + func.name + ". That is, the function is declared and I know what it is, but I can't find the actual code that implements it.");
             },
@@ -54269,7 +53857,7 @@ function overloadResolution(candidates, argTypes, receiverType) {
             notes.push(errors_1.CPPError.param.numParams(candidate.firstDeclaration));
         }
         // TODO: add back in with member functions
-        else if (candidate.isMemberFunction() && (receiverType === null || receiverType === void 0 ? void 0 : receiverType.isConst) && !((_a = candidate.type.receiverType) === null || _a === void 0 ? void 0 : _a.isConst)) {
+        else if (candidate.isMemberFunction && (receiverType === null || receiverType === void 0 ? void 0 : receiverType.isConst) && !((_a = candidate.type.receiverType) === null || _a === void 0 ? void 0 : _a.isConst)) {
             notes.push(errors_1.CPPError.param.thisConst(candidate.firstDeclaration, receiverType));
         }
         else {
@@ -54889,7 +54477,7 @@ function selectOperatorOverload(context, ast, operator, originalArgs) {
     util_1.assert(lookupResult.declarationKind !== "class");
     let selected = overloadResolution(lookupResult.overloads, adjustedArgs.map(arg => arg.type), receiverType).selected;
     if (selected) {
-        if (selected.isMemberFunction()) {
+        if (selected.isMemberFunction) {
             return new MemberOperatorOverloadExpression(context, ast, operator, leftmost, adjustedArgs, selected);
         }
         else {
@@ -55892,7 +55480,7 @@ class CtorInitializer extends constructs_1.BasicCPPConstruct {
             }
             else {
                 let memName = comp.name;
-                let memEntity = receiverType.classDefinition.memberEntitiesByName[memName];
+                let memEntity = receiverType.classDefinition.memberVariableEntitiesByName[memName];
                 if (memEntity) {
                     let memInit = comp.args.length === 0
                         ? DefaultInitializer.create(context, memEntity)
@@ -59679,13 +59267,13 @@ class ArrayOfUnknownBoundType extends TypeBase {
 }
 exports.ArrayOfUnknownBoundType = ArrayOfUnknownBoundType;
 class ClassTypeBase extends TypeBase {
-    constructor(classId, className, shared, isConst = false, isVolatile = false) {
+    constructor(classId, className, qualifiedName, shared, isConst = false, isVolatile = false) {
         super(isConst, isVolatile);
         this.precedence = 0;
-        this.className = "";
         this.templateParameters = [];
         this.classId = classId;
         this.className = className;
+        this.qualifiedName = qualifiedName;
         this.shared = shared;
     }
     get classDefinition() {
@@ -59754,7 +59342,7 @@ class ClassTypeBase extends TypeBase {
     //         return JSON.stringify(value, null, 2);
     //     },
     _cvQualifiedImpl(isConst, isVolatile) {
-        return new ClassTypeBase(this.classId, this.className, this.shared, isConst, isVolatile);
+        return new ClassTypeBase(this.classId, this.className, this.qualifiedName, this.shared, isConst, isVolatile);
     }
     isDefaultConstructible(userDefinedOnly = false) {
         let defaultCtor = this.classDefinition.defaultConstructor;
@@ -59797,8 +59385,8 @@ function sameClassType(thisClass, otherClass) {
         || (!!thisClass.shared.classDefinition && thisClass.shared.classDefinition === otherClass.shared.classDefinition);
 }
 let nextClassId = 0;
-function createClassType(className) {
-    return new ClassTypeBase(nextClassId++, className, {});
+function createClassType(className, qualifiedName) {
+    return new ClassTypeBase(nextClassId++, className, qualifiedName, {});
 }
 exports.createClassType = createClassType;
 // export class ClassType extends ObjectTypeBase {
@@ -60064,7 +59652,10 @@ class FunctionType extends TypeBase {
         return this.sameReceiverType(other) && this.sameParamTypes(other);
     }
     isPotentialOverriderOf(other) {
-        return this.sameParamTypes(other) && this.isConst === other.isConst && this.isVolatile == other.isVolatile;
+        var _a, _b, _c, _d;
+        return this.sameParamTypes(other)
+            && ((_a = this.receiverType) === null || _a === void 0 ? void 0 : _a.isConst) === ((_b = other.receiverType) === null || _b === void 0 ? void 0 : _b.isConst)
+            && ((_c = this.receiverType) === null || _c === void 0 ? void 0 : _c.isVolatile) == ((_d = other.receiverType) === null || _d === void 0 ? void 0 : _d.isVolatile);
     }
     typeString(excludeBase, varname, decorated = false) {
         return this.returnType.typeString(excludeBase, varname + this.paramStrType, decorated);
@@ -60094,156 +59685,56 @@ exports.builtInTypes = {
 /***/ }),
 
 /***/ 7880:
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.SimpleExerciseLobsterOutlet = void 0;
-const simOutlets_1 = __webpack_require__(9357);
-const editors_1 = __webpack_require__(7364);
-const Simulation_1 = __webpack_require__(2295);
-const observe_1 = __webpack_require__(5114);
-const he_1 = __webpack_require__(6492);
-const simple_exercise_outlet_1 = __webpack_require__(9782);
+exports.EXERCISE_SPECIFICATIONS = exports.makeExerciseSpecification = exports.getExerciseSpecification = exports.DEFAULT_EXERCISE = void 0;
+const lodash_1 = __webpack_require__(6486);
+const errors_1 = __webpack_require__(5244);
+const predicates_1 = __webpack_require__(941);
 const Project_1 = __webpack_require__(8367);
+const types_1 = __webpack_require__(8716);
+const analysis_1 = __webpack_require__(5431);
+const loops_1 = __webpack_require__(2327);
 const checkpoints_1 = __webpack_require__(2979);
-__webpack_require__(826);
-const checkpointOutlets_1 = __webpack_require__(8283);
-const InstantMemoryDiagramOutlet_1 = __webpack_require__(3927);
-$(() => {
-    let exID = 1;
-    $(".lobster-ex").each(function () {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
-        $(this).append(simple_exercise_outlet_1.createSimpleExerciseOutlet("" + exID));
-        let filename = (_b = (_a = $(this).find(".lobster-ex-file-name").html()) === null || _a === void 0 ? void 0 : _a.trim()) !== null && _b !== void 0 ? _b : "file.cpp";
-        let projectName = (_d = (_c = $(this).find(".lobster-ex-project-name").html()) === null || _c === void 0 ? void 0 : _c.trim()) !== null && _d !== void 0 ? _d : "UnnamedProject";
-        let completeMessage = (_f = (_e = $(this).find(".lobster-ex-complete-message").html()) === null || _e === void 0 ? void 0 : _e.trim()) !== null && _f !== void 0 ? _f : "Well done! Exercise complete!";
-        let initCode = he_1.decode((_h = (_g = $(this).find(".lobster-ex-init-code").html()) === null || _g === void 0 ? void 0 : _g.trim()) !== null && _h !== void 0 ? _h : "");
-        if (initCode === "") {
-            initCode = (_j = EXERCISE_STARTER_CODE[projectName]) !== null && _j !== void 0 ? _j : "";
-        }
-        let project = new Project_1.Project(projectName, undefined, [{ name: filename, code: initCode, isTranslationUnit: true }], new Project_1.Exercise(checkpoints_1.getExerciseCheckpoints(projectName)));
-        project.turnOnAutoCompile(500);
-        let exOutlet = new SimpleExerciseLobsterOutlet($(this), project, completeMessage);
-        ++exID;
-    });
-});
-class SimpleExerciseLobsterOutlet {
-    constructor(element, project, completeMessage) {
-        this.element = element;
-        this.completeMessage = completeMessage;
-        // Set up simulation and source tabs
-        // var sourceTab = element.find(".sourceTab");
-        // var simTab = element.find(".simTab");
-        this.tabsElem = element.find(".lobster-simulation-outlet-tabs");
-        // TODO: HACK to make codeMirror refresh correctly when sourcePane becomes visible
-        this.tabsElem.find('a.lobster-source-tab').on("shown.bs.tab", () => {
-            this.projectEditor.refreshEditorView();
-        });
-        this.simulationOutlet = new simOutlets_1.SimulationOutlet(element.find(".lobster-sim-pane"));
-        this.simulateTabElem = element.find(".lobster-simulate-tab");
-        this.setSimulationTabEnabled(false);
-        let runButtonElem = element.find(".runButton")
-            .click(() => {
-            let program = this.project.program;
-            if (program.isRunnable()) {
-                let sim = new Simulation_1.Simulation(program);
-                while (!sim.globalAllocator.isDone) {
-                    sim.stepForward(); // TODO: put this loop in simulation runners in function to skip stuff before main
-                }
-                this.setSimulation(sim);
-            }
-            this.simulateTabElem.tab("show");
-        });
-        this.projectEditor = new editors_1.ProjectEditor(element.find(".lobster-source-pane"), project);
-        this.compilationOutlet = new editors_1.CompilationOutlet(element.find(".lobster-compilation-pane"), project);
-        this.compilationStatusOutlet = new editors_1.CompilationStatusOutlet(element.find(".compilation-status-outlet"), project);
-        this.checkpointsOutlet = new checkpointOutlets_1.CheckpointsOutlet(element.find(".lobster-ex-checkpoints"), project.exercise, completeMessage);
-        let IMDOElem = element.find(".lobster-instant-memory-diagram");
-        this.instantMemoryDiagramOutlet = new InstantMemoryDiagramOutlet_1.InstantMemoryDiagramOutlet(IMDOElem, project, false);
-        this.isInstantMemoryDiagramActive = false;
-        element.find(".lobster-instant-memory-diagram-buttons button").on("click", () => {
-            ["active", "btn-default", "btn-primary"].forEach(c => element.find(".lobster-instant-memory-diagram-buttons button").toggleClass(c));
-            this.isInstantMemoryDiagramActive = !this.isInstantMemoryDiagramActive;
-            this.instantMemoryDiagramOutlet.setActive(this.isInstantMemoryDiagramActive);
-            if (this.isInstantMemoryDiagramActive) {
-                IMDOElem.show();
-            }
-            else {
-                IMDOElem.hide();
-            }
-        });
-        this.project = project;
-    }
-    setProject(project) {
-        this.project = project;
-        this.projectEditor.setProject(project);
-        this.compilationOutlet.setProject(project);
-        this.compilationStatusOutlet.setProject(project);
-        this.checkpointsOutlet.setExercise(project.exercise);
-        this.instantMemoryDiagramOutlet.setProject(project);
-        return this.project;
-    }
-    setSimulation(sim) {
-        this.clearSimulation();
-        this.sim = sim;
-        observe_1.listenTo(this, sim);
-        this.simulationOutlet.setSimulation(sim);
-        this.setSimulationTabEnabled(true);
-    }
-    clearSimulation() {
-        this.setSimulationTabEnabled(false);
-        this.simulationOutlet.clearSimulation();
-        if (this.sim) {
-            observe_1.stopListeningTo(this, this.sim);
-        }
-        delete this.sim;
-    }
-    // private hideAnnotationMessage() {
-    //     this.annotationMessagesElem.css("top", "125px");
-    //     if (this.afterAnnotation.length > 0) {
-    //         this.afterAnnotation.forEach(fn => fn());
-    //         this.afterAnnotation.length = 0;
-    //     }
-    // }
-    requestFocus(msg) {
-        if (msg.source === this.projectEditor) {
-            this.tabsElem.find('a.lobster-source-tab').tab("show");
-        }
-    }
-    beforeStepForward(msg) {
-        var oldGets = $(".code-memoryObject .get");
-        var oldSets = $(".code-memoryObject .set");
-        setTimeout(() => {
-            oldGets.removeClass("get");
-            oldSets.removeClass("set");
-        }, 300);
-    }
-    setSimulationTabEnabled(isEnabled) {
-        if (isEnabled) {
-            this.simulateTabElem.parent().removeClass("disabled");
-        }
-        else {
-            this.simulateTabElem.parent().addClass("disabled");
-        }
-    }
+exports.DEFAULT_EXERCISE = {
+    starterCode: "",
+    checkpoints: [],
+    completionCriteria: Project_1.COMPLETION_LAST_CHECKPOINT,
+    completionMessage: "Nice work! Exercise complete!"
+};
+function getExerciseSpecification(exercise_key) {
+    let spec = exports.EXERCISE_SPECIFICATIONS[exercise_key];
+    return spec && makeExerciseSpecification(spec);
 }
-__decorate([
-    observe_1.messageResponse("requestFocus")
-], SimpleExerciseLobsterOutlet.prototype, "requestFocus", null);
-__decorate([
-    observe_1.messageResponse("beforeStepForward")
-], SimpleExerciseLobsterOutlet.prototype, "beforeStepForward", null);
-exports.SimpleExerciseLobsterOutlet = SimpleExerciseLobsterOutlet;
-const EXERCISE_STARTER_CODE = {
-    "ch12_01_ex": `#include <iostream>
+exports.getExerciseSpecification = getExerciseSpecification;
+function makeExerciseSpecification(spec) {
+    return Object.assign({}, exports.DEFAULT_EXERCISE, spec);
+}
+exports.makeExerciseSpecification = makeExerciseSpecification;
+exports.EXERCISE_SPECIFICATIONS = {
+    "test_exercise_1": {
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Declare x", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("x"));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Use a for loop", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("for_statement"));
+            }),
+            new checkpoints_1.OutputCheckpoint("Print \"Hello World!\"", checkpoints_1.outputComparator("Hello World!", true))
+        ]
+    },
+    "test_exercise_2": {
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Declare z", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("z"));
+            })
+        ]
+    },
+    "ch12_01_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60255,7 +59746,20 @@ int main() {
 
   cout << "The result is " << z << "!" << endl;
 }`,
-    "ch12_02_ex": `#include <iostream>
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Compute y", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("y"));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Compute z", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("z"));
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output === "Hello World!\nThe result is 120!\n";
+            })
+        ]
+    },
+    "ch12_02_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60273,8 +59777,10 @@ int main() {
   bool b2 = 0;
   bool b3 = 3.14;
   bool b4 = -1;
-}`,
-    "ch12_04_ex": `#include <iostream>
+}`
+    },
+    "ch12_04_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60292,8 +59798,10 @@ int main() {
   
   cout << d1 / i2 << endl;
   
-}`,
-    "ch12_04_ex_stopwatch": `#include <iostream>
+}`
+    },
+    "ch12_04_ex_stopwatch": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60308,7 +59816,23 @@ int main() {
   //cout << "Minutes: " << m << endl;
   //cout << "Seconds: " << s << endl;
 }`,
-    "ch12_05_ex": `#include <iostream>
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Compute h", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("h"));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Compute m", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("m"));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Compute s", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableName("s"));
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output === "Hours: 1\nMinutes: 2\nSeconds: 33\n";
+            })
+        ]
+    },
+    "ch12_05_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60327,8 +59851,10 @@ int main() {
   cout << "test4: " << (a < 1 || c < 10) << endl;
   
   cout << "test5: " << (e || 7 / 2 == 3) << endl;
-}`,
-    "ch13_02_ex": `#include <iostream>
+}`
+    },
+    "ch13_02_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60338,7 +59864,50 @@ int main() {
 
 cout << "done!" << endl;
 }`,
-    "ch13_03_ex": `#include <iostream>
+        checkpoints: [
+            new checkpoints_1.IsCompiledCheckpoint("Compiles"),
+            new checkpoints_1.StaticAnalysisCheckpoint("Start at 9", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(9));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("While Loop", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("while_statement"));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Condition", (program) => {
+                let loopVar = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(9));
+                let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("while_statement"));
+                if (!loopVar || !loop) {
+                    return false;
+                }
+                // verify loop condition contains the right variable
+                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byIdentifierName(loopVar.name))) {
+                    return false;
+                }
+                // verify loop condition contains a number
+                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("numeric_literal_expression"))) {
+                    return false;
+                }
+                // verify loop condition contains a relational operator
+                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"))) {
+                    return false;
+                }
+                return true;
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Update Expression", (program) => {
+                let loopVar = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(9));
+                let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("while_statement"));
+                if (!loopVar || !loop) {
+                    return false;
+                }
+                // verify loop body contains an update for the var
+                return !!analysis_1.findFirstConstruct(loop.body, predicates_1.Predicates.byVariableUpdate(loopVar.name));
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output === "9 7 5 3 1 done!\n";
+            })
+        ]
+    },
+    "ch13_03_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60357,7 +59926,21 @@ int main() {
 
   cout << "done!" << endl;
 }`,
-    "ch13_04_ex": `#include <iostream>
+        completionCriteria: Project_1.COMPLETION_ALL_CHECKPOINTS,
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Use ++", (program) => {
+                return !!analysis_1.findConstructs(program, predicates_1.Predicates.byKinds(["prefix_increment_expression", "postfix_increment_expression"])).find(construct => construct.operator === "++");
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Use --", (program) => {
+                return !!analysis_1.findConstructs(program, predicates_1.Predicates.byKinds(["prefix_increment_expression", "postfix_increment_expression"])).find(construct => construct.operator === "--");
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output === "0\n1\n2\n3\n4\n3\n2\n1\n0\ndone!\n";
+            })
+        ]
+    },
+    "ch13_04_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60373,7 +59956,18 @@ int main() {
   }
   cout << "done!" << endl;
 }`,
-    "ch13_05_ex": `#include <iostream>
+        completionCriteria: Project_1.COMPLETION_ALL_CHECKPOINTS,
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("for Loop Syntax", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKind("for_statement"));
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output === "1 2 4 8 16 32 done!\n";
+            })
+        ]
+    },
+    "ch13_05_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60388,7 +59982,18 @@ int main() {
   
   
   }`,
-    "ch13_06_ex": `#include <iostream>
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Nested Loops", (program) => {
+                let outerLoop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKinds(["for_statement", "while_statement"]));
+                return !!outerLoop && !!analysis_1.findFirstConstruct(outerLoop.body, predicates_1.Predicates.byKinds(["for_statement", "while_statement"]));
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output === "X\nXX\nXXX\nXXXX\nXXXXX\n";
+            })
+        ]
+    },
+    "ch13_06_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60408,7 +60013,14 @@ int main() {
   }
   cout << "done!" << endl;
 }`,
-    "ch13_06_ex_2": `#include <iostream>
+        checkpoints: [
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output === "1 5 7 11 13 done!\n";
+            })
+        ]
+    },
+    "ch13_06_ex_2": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 int main() {
@@ -60431,34 +60043,41 @@ int main() {
   }
   cout << "done!" << endl;
 }`,
-    "ch14_02_ex": `#include <iostream>
-using namespace std;
-
-// Returns true if n is prime, false otherwise
-// Works for any number n
-bool isPrime(int n) {
-  for(int x = 2; x < n; ++x) {
-    if (n % x == 0) {
-      return false;
-    }
-  }
-  return true;
-}
-
-int main() {
-  int N = 5;
-  int x = 2;
-  // Iterate through candidate x values
-  while(N > 0) {
-    if( isPrime(x) ) { // Check primeness
-      cout << x << " ";
-      --N;
-    }
-    ++x;
-  }
-  cout << "done!" << endl;
-}`,
-    "ch14_03_ex": `#include <iostream>
+        checkpoints: [
+        // no checkpoints, just an example not an exercise
+        ]
+    },
+    "ch14_02_ex": {
+        starterCode: `#include <iostream>
+        using namespace std;
+        
+        // Returns true if n is prime, false otherwise
+        // Works for any number n
+        bool isPrime(int n) {
+          for(int x = 2; x < n; ++x) {
+            if (n % x == 0) {
+              return false;
+            }
+          }
+          return true;
+        }
+        
+        int main() {
+          int N = 5;
+          int x = 2;
+          // Iterate through candidate x values
+          while(N > 0) {
+            if( isPrime(x) ) { // Check primeness
+              cout << x << " ";
+              --N;
+            }
+            ++x;
+          }
+          cout << "done!" << endl;
+        }`
+    },
+    "ch14_03_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 void print_row_of_X(int num) {
@@ -60477,7 +60096,14 @@ void print_triangle_X3() {
 int main() {
   print_triangle_X3();
 }`,
-    "ch14_04_ex": `#include <iostream>
+        checkpoints: [
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return checkpoints_1.removeWhitespace(output) === checkpoints_1.removeWhitespace("X\nXX\nXXX\nXX\nX\n");
+            })
+        ]
+    },
+    "ch14_04_ex": {
+        starterCode: `#include <iostream>
 using namespace std;
 
 const double PI = 3.14159;
@@ -60494,8 +60120,10 @@ int main() {
   double rad = 5;
   cout << "Area: " << circleArea(rad) << endl;
   cout << "Circumference: " << circleCircumference(rad) << endl;
-}`,
-    "ch15_ex_echo": `#include <iostream>
+}`
+    },
+    "ch15_ex_echo": {
+        starterCode: `#include <iostream>
 #include <string>
 using namespace std;
 // A very annoying program: It echoes until you say stop
@@ -60511,7 +60139,19 @@ int main() {
   // Print at the end (don't remove this)
   cout << "Ok fine I'll stop :(" << endl;
 }`,
-    "ch15_ex_repeat": `#include <iostream>
+        checkpoints: [
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output.indexOf("Hi") !== -1
+                    && output.indexOf("How") !== -1
+                    && output.indexOf("are") !== -1
+                    && output.indexOf("you") !== -1
+                    && output.indexOf("Stop") !== -1
+                    && output.indexOf("Ok fine I'll stop :(") !== -1;
+            }, "Hi\nHow are you\nStop\nSTOP\n")
+        ]
+    },
+    "ch15_ex_repeat": {
+        starterCode: `#include <iostream>
 #include <string>
 using namespace std;
 
@@ -60531,9 +60171,16 @@ int main() {
   cout << s2 << endl; // "ababababab"
 
   cout << repeat("echo ", 2) << endl; // "echo echo "
-}
-`,
-    "ch16_ex_printDoubled": `#include <iostream>
+}`,
+        checkpoints: [
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output.indexOf("abababab") !== -1
+                    && output.indexOf("echo echo ") !== -1;
+            })
+        ]
+    },
+    "ch16_ex_printDoubled": {
+        starterCode: `#include <iostream>
 #include <vector>
 using namespace std;
 
@@ -60551,10 +60198,60 @@ int main() {
   vector<int> someInts(4,42);
   someInts.at(2) = 5; 
   printDoubled(someInts); // prints { 84 84 10 84 }
-} 
-
-`,
-    "ch16_ex_all_negative": `#include <iostream>
+}`,
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Start at 0", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(0));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Check against size", (program, project) => {
+                let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
+                if (!loop) {
+                    return false;
+                }
+                // verify loop condition does NOT contain a number
+                let hardcodedLimit = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("numeric_literal_expression"));
+                if (hardcodedLimit) {
+                    project.addNote(new errors_1.CompilerNote(loop.condition, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Uh oh! It looks like you've got a hardcoded number ${hardcodedLimit.value.rawValue} for the loop size. This might work for the test case in main, but what if the function was called on a different vector?`));
+                    return false;
+                }
+                // verify loop condition contains a relational operator
+                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"))) {
+                    return false;
+                }
+                // if loop condition does not contain a call to vector.size() return false
+                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byFunctionCallName("size"))) {
+                    return false;
+                }
+                // tricky - don't look for subscript expressions, since with a vector it's actually
+                // an overloaded [] and we need to look for that as a function call
+                let indexingOperations = analysis_1.findConstructs(loop.body, predicates_1.Predicates.byOperatorOverloadCall("[]"));
+                // loop condition contains size (from before), but also has <= or >=
+                // and no arithmetic operators or pre/post increments that could make up for the equal to part
+                // (e.g. i <= v.size() is very much wrong, but i <= v.size() - 1 is ok)
+                let conditionOperator = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"));
+                if (conditionOperator) {
+                    if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKinds(["arithmetic_binary_operator_expression", "prefix_increment_expression", "postfix_increment_expression"]))) {
+                        if (conditionOperator.operator === "<=" || conditionOperator.operator === ">=") {
+                            if (!indexingOperations.some(indexingOp => analysis_1.findFirstConstruct(indexingOp, predicates_1.Predicates.byKinds([
+                                "arithmetic_binary_operator_expression",
+                                "prefix_increment_expression",
+                                "postfix_increment_expression"
+                            ])))) {
+                                project.addNote(new errors_1.CompilerNote(conditionOperator, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Double check the limit in this condition. I think there might be an off-by-one error that takes you out of bounds if you're using the ${conditionOperator.operator} operator.`));
+                                return false;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output.indexOf("{ 84 84 10 84 }") !== -1;
+            })
+        ]
+    },
+    "ch16_ex_all_negative": {
+        starterCode: `#include <iostream>
 #include <vector>
 using namespace std;
 
@@ -60581,7 +60278,61 @@ int main() {
   cout << "vec3 all negative? ";
   cout << all_negative(vec3) << endl;
 }`,
-    "ch17_ex_encrypt_word": `#include <iostream>
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Start at 0", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(0));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Check against size", (program, project) => {
+                // Find a loop, either while or for
+                let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
+                if (!loop) {
+                    return false;
+                }
+                // Give a specific hint if loop condition does contains a number
+                let hardcodedLimit = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("numeric_literal_expression"));
+                if (hardcodedLimit) {
+                    project.addNote(new errors_1.CompilerNote(loop.condition, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Uh oh! It looks like you've got a hardcoded number ${hardcodedLimit.value.rawValue} for the loop size. This might work for the test case in main, but what if the function was called on a different vector?`));
+                    return false;
+                }
+                // verify loop condition contains a relational operator
+                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"))) {
+                    return false;
+                }
+                // if loop condition does not contain a call to vector.size() return false
+                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byFunctionCallName("size"))) {
+                    return false;
+                }
+                // tricky - don't look for subscript expressions, since with a vector it's actually
+                // an overloaded [] and we need to look for that as a function call
+                let indexingOperations = analysis_1.findConstructs(loop.body, predicates_1.Predicates.byOperatorOverloadCall("[]"));
+                // loop condition contains size (from before), but also has <= or >=
+                // and no arithmetic operators or pre/post increments that could make up for the equal to part
+                // (e.g. i <= v.size() is very much wrong, but i <= v.size() - 1 is ok)
+                let conditionOperator = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"));
+                if (conditionOperator) {
+                    if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKinds(["arithmetic_binary_operator_expression", "prefix_increment_expression", "postfix_increment_expression"]))) {
+                        if (conditionOperator.operator === "<=" || conditionOperator.operator === ">=") {
+                            if (!indexingOperations.some(indexingOp => analysis_1.findFirstConstruct(indexingOp, predicates_1.Predicates.byKinds([
+                                "arithmetic_binary_operator_expression",
+                                "prefix_increment_expression",
+                                "postfix_increment_expression"
+                            ])))) {
+                                project.addNote(new errors_1.CompilerNote(conditionOperator, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Double check the limit in this condition. I think there might be an off-by-one error that takes you out of bounds if you're using the ${conditionOperator.operator} operator.`));
+                                return false;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return checkpoints_1.removeWhitespace(output) === checkpoints_1.removeWhitespace("vec1 all negative? 0\nvec2 all negative? 0\nvec3 all negative? 1\n")
+                    || checkpoints_1.removeWhitespace(output) === checkpoints_1.removeWhitespace("vec1 all negative? false\nvec2 all negative? false\nvec3 all negative? true\n");
+            })
+        ]
+    },
+    "ch17_ex_encrypt_word": {
+        starterCode: `#include <iostream>
 #include <string>
 #include <vector>
 
@@ -60606,7 +60357,40 @@ int main() {
   string s = "hello";
   cout << encrypt_word(s, 5) << endl; // mjqqt
 }`,
-    "ch17_ex_unit_testing": `#include <iostream>
+        checkpoints: [
+            // new StaticAnalysisCheckpoint("Local copy of text parameter", (program: Program) => {
+            //     let fn = findFirstConstruct(program, Predicates.byFunctionName("encrypt_word"));
+            //     let textParam = fn?.parameters.find(p => p.type?.isCompleteClassType() && p.type.className === "string");
+            //     let textParamName = textParam?.name;
+            //     if (!fn || !textParam || !textParamName) { return false; }
+            //     // find all local string variable definitions
+            //     let localStrings = findConstructs(fn, Predicates.byKind("local_variable_definition")).filter(
+            //         def => def.type.isCompleteClassType() && def.type.className === "string"
+            //     );
+            //     let stringAssignments = findConstructs(fn, Predicates.byKind("member_operator_overload_expression")).filter(
+            //         assn => assn.receiverExpression.type.className === "string"
+            //     );
+            //     // one of those either needs to be initialized with "text" parameter or
+            //     // later on assigned its value
+            //     return localStrings.some(s => s.initializer && containsConstruct(s.initializer, Predicates.byIdentifierName(textParamName!))) ||
+            //             stringAssignments.some(assn => containsConstruct(assn, Predicates.byVariableName(textParamName!)));
+            // }),
+            new checkpoints_1.StaticAnalysisCheckpoint("loop", (program) => {
+                let fn = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("encrypt_word"));
+                return !!fn && analysis_1.containsConstruct(fn, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Call shift_letter()", (program) => {
+                let fn = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("encrypt_word"));
+                let call = fn && analysis_1.findFirstConstruct(fn, predicates_1.Predicates.byFunctionCallName("shift_letter"));
+                return !!(call === null || call === void 0 ? void 0 : call.isSuccessfullyCompiled());
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output.indexOf("mjqqt") !== -1;
+            })
+        ]
+    },
+    "ch17_ex_unit_testing": {
+        starterCode: `#include <iostream>
 #include <string>
 
 using namespace std;
@@ -60628,7 +60412,18 @@ int main() {
   
   cout << "Tests finished." << endl;
 }`,
-    "ch18_ex_printRover": `#include <iostream>
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Add 3 more test cases (6 total)", (program) => {
+                let main = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("main"));
+                if (!main) {
+                    return false;
+                }
+                return analysis_1.findConstructs(main, predicates_1.Predicates.byKind("magic_function_call_expression")).filter(call => call.functionName === "assert").length >= 6;
+            })
+        ]
+    },
+    "ch18_ex_printRover": {
+        starterCode: `#include <iostream>
 #include <string>
 
 using namespace std;
@@ -60654,9 +60449,42 @@ int main() {
   // This should print "Type 1 Rover #a238 (80%)"
   printRover(myRover, cout);
   cout << endl; 
-}
-`,
-    "ch19_ex_printVecOfInts": `#include <iostream>
+}`,
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Print type", (program, project) => {
+                let printRover = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("printRover"));
+                if (!printRover) {
+                    return false;
+                }
+                // Give a specific hint if they accidentally use cout in the function
+                let cout = analysis_1.findFirstConstruct(printRover, predicates_1.Predicates.byIdentifierName("cout"));
+                if (cout) {
+                    project.addNote(new errors_1.CompilerNote(cout, errors_1.NoteKind.STYLE, "cout_in_ostream_function", `Oops! This is a very easy mistake to make, since we're all so used to typing cout. But printRover() takes in a particular ostream parameter called 'output', and you should make sure to send your output through that stream (in case it turns out to be different from cout).`));
+                    return false;
+                }
+                return analysis_1.findConstructs(printRover, predicates_1.Predicates.byKind("output_operator_expression")).some(operator => operator.operator === "<<" && analysis_1.containsConstruct(operator.right, predicates_1.Predicates.byMemberAccessName("type")));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Print id", (program) => {
+                let printRover = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("printRover"));
+                if (!printRover) {
+                    return false;
+                }
+                return analysis_1.findConstructs(printRover, predicates_1.Predicates.byKind("non_member_operator_overload_expression")).some(operator => operator.operator === "<<" && analysis_1.containsConstruct(operator, predicates_1.Predicates.byMemberAccessName("id")));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Print charge", (program) => {
+                let printRover = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("printRover"));
+                if (!printRover) {
+                    return false;
+                }
+                return analysis_1.findConstructs(printRover, predicates_1.Predicates.byKind("output_operator_expression")).some(operator => operator.operator === "<<" && analysis_1.containsConstruct(operator.right, predicates_1.Predicates.byMemberAccessName("charge")));
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output (and formatting)", (output) => {
+                return checkpoints_1.removeWhitespace(output) === checkpoints_1.removeWhitespace("Type 1 Rover #a238 (80%)");
+            })
+        ]
+    },
+    "ch19_ex_printVecOfInts": {
+        starterCode: `#include <iostream>
 #include <vector>
 using namespace std;
 
@@ -60676,8 +60504,213 @@ int main() {
 
   vector<int> moreInts = {0, -5, 94, 16};
   printVecOfInts(moreInts); // prints { 0 -5 94 16 }
-}
-`
+}`,
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Start at 0", (program) => {
+                return !!analysis_1.findFirstConstruct(program, predicates_1.Predicates.byVariableInitialValue(0));
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Check against size", (program, project) => {
+                let loop = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
+                if (!loop) {
+                    return false;
+                }
+                // verify loop condition does NOT contain a number
+                let hardcodedLimit = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("numeric_literal_expression"));
+                if (hardcodedLimit) {
+                    project.addNote(new errors_1.CompilerNote(loop.condition, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Uh oh! It looks like you've got a hardcoded number ${hardcodedLimit.value.rawValue} for the loop size. This might work for the test case in main, but what if the function was called on a different vector?`));
+                    return false;
+                }
+                // verify loop condition contains a relational operator
+                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"))) {
+                    return false;
+                }
+                // if loop condition does not contain a call to vector.size() return false
+                if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byFunctionCallName("size"))) {
+                    return false;
+                }
+                // tricky - don't look for subscript expressions, since with a vector it's actually
+                // an overloaded [] and we need to look for that as a function call
+                let indexingOperations = analysis_1.findConstructs(loop.body, predicates_1.Predicates.byOperatorOverloadCall("[]"));
+                // loop condition contains size (from before), but also has <= or >=
+                // and no arithmetic operators or pre/post increments that could make up for the equal to part
+                // (e.g. i <= v.size() is very much wrong, but i <= v.size() - 1 is ok)
+                let conditionOperator = analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKind("relational_binary_operator_expression"));
+                if (conditionOperator) {
+                    if (!analysis_1.findFirstConstruct(loop.condition, predicates_1.Predicates.byKinds(["arithmetic_binary_operator_expression", "prefix_increment_expression", "postfix_increment_expression"]))) {
+                        if (conditionOperator.operator === "<=" || conditionOperator.operator === ">=") {
+                            if (!indexingOperations.some(indexingOp => analysis_1.findFirstConstruct(indexingOp, predicates_1.Predicates.byKinds([
+                                "arithmetic_binary_operator_expression",
+                                "prefix_increment_expression",
+                                "postfix_increment_expression"
+                            ])))) {
+                                project.addNote(new errors_1.CompilerNote(conditionOperator, errors_1.NoteKind.STYLE, "hardcoded_vector_size", `Double check the limit in this condition. I think there might be an off-by-one error that takes you out of bounds if you're using the ${conditionOperator.operator} operator.`));
+                                return false;
+                            }
+                        }
+                    }
+                }
+                return true;
+            }),
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return checkpoints_1.removeWhitespace(output).indexOf(checkpoints_1.removeWhitespace("{ 1 2 3 4 5 }")) !== -1
+                    && checkpoints_1.removeWhitespace(output).indexOf(checkpoints_1.removeWhitespace("{ 0 -5 94 16 }")) !== -1;
+            })
+        ]
+    },
+    "eecs280_ex_swap_by_pointer": {
+        checkpoints: [
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output) => {
+                return output.indexOf("a = 5") !== -1
+                    && output.indexOf("b = 3") !== -1;
+            })
+        ]
+    },
+    "loop_control_vars": {
+        checkpoints: [
+            new checkpoints_1.OutputCheckpoint("Checking Loops", (output) => {
+                return true;
+            })
+        ]
+    },
+    "eecs280_ex_strcpy": {
+        checkpoints: [
+            new checkpoints_1.OutputCheckpoint("Correct Output", (output, project) => {
+                if (output.indexOf("frogrd") !== -1) {
+                    let strcpyFn = analysis_1.findFirstConstruct(project.program, predicates_1.Predicates.byFunctionName("strcpy"));
+                    if (strcpyFn) {
+                        project.addNote(new errors_1.CompilerNote(strcpyFn.declaration.declarator, errors_1.NoteKind.STYLE, "hint_strcpy_null_char", `Hint: It looks like you're quite close to the right answer! Check out the simulation output. What gets printed? How does that relate to the placement of the null characters in memory?`));
+                    }
+                    return false;
+                }
+                let first = output.indexOf("frog");
+                if (first === -1) {
+                    return false;
+                }
+                let second = output.indexOf("frog", first + 1);
+                return second !== -1;
+            })
+        ]
+    },
+    "eecs280_ex_lab2_squareArray": {
+        checkpoints: [
+            new checkpoints_1.StaticAnalysisCheckpoint("Traversal by Index", (program, project) => {
+                let squareArrayFn = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("squareArray"));
+                if (!squareArrayFn) {
+                    return false;
+                }
+                // let arrParam = squareArrayFn.parameters[0];
+                // if (!Predicates.isTypedDeclaration(arrParam, isPointerToType(Int))) {
+                //     return false;
+                // }
+                // let lenParam = squareArrayFn.parameters[1];
+                // if (!Predicates.isTypedDeclaration(lenParam, isType(Int))) {
+                //     return false;
+                // }
+                let loop = analysis_1.findFirstConstruct(squareArrayFn, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
+                if (!loop) {
+                    return false;
+                }
+                let loopControlVars = loops_1.findLoopControlVars(loop);
+                return loopControlVars.some(v => v.isTyped(types_1.isIntegralType));
+                // // verify loop condition contains a relational operator
+                // let conditionOk = false;
+                // let loopCondComp = findFirstConstruct(loop.condition, Predicates.byKind("relational_binary_operator_expression"));
+                // if (loopCondComp) {
+                //     let compOperands = <AnalyticExpression[]>[loopCondComp.left, loopCondComp.right];
+                //     if (compOperands.every(Predicates.byTypedExpression(isType(Int)))) {
+                //         let hardcodedLimit = findFirstConstruct(loop.condition, Predicates.byKind("numeric_literal_expression"));
+                //         if (hardcodedLimit) {
+                //             project.addNote(new CompilerNote(loop.condition, NoteKind.STYLE, "hardcoded_vector_size",
+                //             `Uh oh! It looks like you've got a hardcoded number ${hardcodedLimit.value.rawValue} for the loop size. This might work for the test case in main, but what if the function was called on a different vector?`));
+                //             return false;
+                //         }
+                //         else {
+                //             conditionOk = true;
+                //         }
+                //     }
+                //     else {
+                //         project.addNote(new CompilerNote(loop.condition, NoteKind.STYLE, "traversal_by_index_condition",
+                //         `For traversal by index, make sure  This might work for the test case in main, but what if the function was called on a different vector?`));
+                //     }
+                // }
+                // // if loop condition does not contain a call to vector.size() return false
+                // if (!findFirstConstruct(loop.condition, Predicates.byFunctionCallName("size"))) {
+                //     return false;
+                // }
+                // // tricky - don't look for subscript expressions, since with a vector it's actually
+                // // an overloaded [] and we need to look for that as a function call
+                // let indexingOperations = findConstructs(loop.body, Predicates.byOperatorOverloadCall("[]"));
+                // // loop condition contains size (from before), but also has <= or >=
+                // // and no arithmetic operators or pre/post increments that could make up for the equal to part
+                // // (e.g. i <= v.size() is very much wrong, but i <= v.size() - 1 is ok)
+                // let conditionOperator = findFirstConstruct(loop.condition, Predicates.byKind("relational_binary_operator_expression"));
+                // if (conditionOperator){
+                //     if (!findFirstConstruct(loop.condition,
+                //         Predicates.byKinds(["arithmetic_binary_operator_expression", "prefix_increment_expression", "postfix_increment_expression"]))) {
+                //         if (conditionOperator.operator === "<=" || conditionOperator.operator === ">=") {
+                //             if (!indexingOperations.some(indexingOp => findFirstConstruct(indexingOp,
+                //                 Predicates.byKinds([
+                //                     "arithmetic_binary_operator_expression",
+                //                     "prefix_increment_expression",
+                //                     "postfix_increment_expression"])
+                //                 ))) {
+                //                     project.addNote(new CompilerNote(conditionOperator, NoteKind.STYLE, "hardcoded_vector_size",
+                //                         `Double check the limit in this condition. I think there might be an off-by-one error that takes you out of bounds if you're using the ${conditionOperator.operator} operator.`));
+                //                     return false;
+                //                 }
+                //         }
+                //     }
+                // }
+            }),
+            new checkpoints_1.StaticAnalysisCheckpoint("Traversal by Pointer", (program, project) => {
+                let squareArrayFn = analysis_1.findFirstConstruct(program, predicates_1.Predicates.byFunctionName("squareArray"));
+                if (!squareArrayFn) {
+                    return false;
+                }
+                let loop = analysis_1.findFirstConstruct(squareArrayFn, predicates_1.Predicates.byKinds(["while_statement", "for_statement"]));
+                if (!loop) {
+                    return false;
+                }
+                let loopControlVars = loops_1.findLoopControlVars(loop);
+                return loopControlVars.some(v => v.isTyped(types_1.isPointerType));
+            }),
+            new checkpoints_1.EndOfMainStateCheckpoint("arr modified to {16, 25, 4}", (sim) => {
+                let main = sim.program.mainFunction;
+                let arrEntity = main.context.functionLocals.localObjects.find(local => local.name === "arr");
+                if (!arrEntity) {
+                    return false;
+                }
+                let mainFrame = sim.memory.stack.topFrame();
+                let arr = mainFrame.localObjectLookup(arrEntity);
+                if (!arr.isTyped(types_1.isBoundedArrayOfType(types_1.isType(types_1.Int)))) {
+                    return false;
+                }
+                let elts = arr.rawValue();
+                return lodash_1.isEqual(elts, [16, 25, 4]);
+            })
+            // new EndOfMainStateCheckpoint("Correct Output", (sim: Simulation) => {
+            //     let main = sim.program.mainFunction;
+            //     let mainFrame = sim.memory.stack.topFrame()!;
+            //     let locals = sim.program.mainFunction.context.functionLocals.localObjects.map(local => local.firstDeclaration);
+            //     let localArrays = locals.filter(Predicates.byTypedDeclaration(isBoundedArrayOfType(isType(Int))));
+            //     let squareArrayCalls = findConstructs(main, Predicates.byFunctionCallName("squareArray"));
+            //     // Filter to only those localArrays that appear in exactly one call to squareArray
+            //     localArrays = localArrays.filter(localArr => !!findFirstConstruct(squareArrayCalls, Predicates.byIdentifierName(localArr.name)))
+            //     return localArrays.every(localArr => {
+            //         if (!))
+            //     });
+            //     // if (!arrEntity || !(arrEntity instanceof LocalObjectEntity)) {
+            //     //     return false;
+            //     // }
+            //     // let arr = mainFrame.localObjectLookup(arrEntity);
+            //     // if (!arr.isTyped(isBoundedArrayOfType(isType(Int)))) {
+            //     //     return false;
+            //     // }
+            //     // let elts = arr.rawValue();
+            //     // return isEqual(elts, [])
+            // })
+        ]
+    }
 };
 
 
@@ -60706,8 +60739,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ProjectSaveOutlet = exports.LobsterApplication = void 0;
 const checkpoints_1 = __webpack_require__(2979);
-const Project_1 = __webpack_require__(8367);
 const exercises_1 = __webpack_require__(7880);
+const Project_1 = __webpack_require__(8367);
+const SimpleExerciseLobsterOutlet_1 = __webpack_require__(4229);
 const observe_1 = __webpack_require__(5114);
 const util_1 = __webpack_require__(6560);
 const octicons_1 = __webpack_require__(3890);
@@ -60731,7 +60765,7 @@ class LobsterApplication {
         this.setUpElements();
         $('[data-toggle="tooltip"]').tooltip();
         let defaultProject = createDefaultProject();
-        this.lobsterOutlet = new exercises_1.SimpleExerciseLobsterOutlet($(".lobster-lobster"), defaultProject, "Nice work!");
+        this.lobsterOutlet = new SimpleExerciseLobsterOutlet_1.SimpleExerciseLobsterOutlet($(".lobster-lobster"), defaultProject);
         this.projectSaveOutlet = new ProjectSaveOutlet($(".lobster-project-save-outlet"), defaultProject, (project) => projects_1.saveProjectContents(project));
         this.activeProject = this.setProject(defaultProject, false);
         this.logInButtonElem = $(".lobster-log-in-button");
@@ -60777,7 +60811,7 @@ class LobsterApplication {
             $("#lobster-edit-project-modal").modal("hide");
         });
         // Edit Exercise Modal
-        Object.keys(checkpoints_1.EXERCISE_CHECKPOINTS).forEach((key) => $("#lobster-exercise-key-choices").append(`<option value="${key}">`));
+        Object.keys(exercises_1.EXERCISE_SPECIFICATIONS).forEach((key) => $("#lobster-exercise-key-choices").append(`<option value="${key}">`));
         $("#lobster-edit-exercise-modal").on('show.bs.modal', () => {
             var _a, _b;
             $("#lobster-edit-exercise-key").val((_b = (_a = this.activeProjectData) === null || _a === void 0 ? void 0 : _a.exercise.exercise_key) !== null && _b !== void 0 ? _b : "");
@@ -60841,9 +60875,9 @@ class LobsterApplication {
     setProjectFromData(projectData) {
         return __awaiter(this, void 0, void 0, function* () {
             this.activeProjectData = projectData; // will be undefined if no exercise
-            let checkpoints = checkpoints_1.getExerciseCheckpoints(projectData.exercise.exercise_key);
+            let exerciseSpec = exercises_1.getExerciseSpecification(projectData.exercise.exercise_key);
             let extras = extras_1.getExtras(projectData.exercise.exercise_key).concat(extras_1.getExtras(projectData.exercise.extra_keys));
-            return this.setProject(new Project_1.Project(projectData.name, projectData.id, projects_1.parseProjectContents(projectData).files, new Project_1.Exercise(checkpoints), extras).turnOnAutoCompile(), projectData.write_access);
+            return this.setProject(new Project_1.Project(projectData.name, projectData.id, projects_1.parseProjectContents(projectData).files, new Project_1.Exercise(exerciseSpec !== null && exerciseSpec !== void 0 ? exerciseSpec : exercises_1.DEFAULT_EXERCISE), extras).turnOnAutoCompile(), projectData.write_access);
         });
     }
     refreshMyProjectsList() {
@@ -60962,8 +60996,9 @@ class LobsterApplication {
         });
     }
     editActiveExercise(exercise_key) {
+        var _a;
         return __awaiter(this, void 0, void 0, function* () {
-            this.activeProject.exercise.setCheckpoints(checkpoints_1.getExerciseCheckpoints(exercise_key));
+            this.activeProject.exercise.changeSpecification((_a = exercises_1.getExerciseSpecification(exercise_key)) !== null && _a !== void 0 ? _a : exercises_1.DEFAULT_EXERCISE);
             if (this.activeProjectData) {
                 this.activeProjectData.exercise.exercise_key = exercise_key;
                 yield exercises_2.saveExercise(this.activeProjectData.exercise);
@@ -60987,9 +61022,11 @@ exports.LobsterApplication = LobsterApplication;
 function createDefaultProject() {
     return new Project_1.Project("[unnamed project]", undefined, [
         { name: "file.cpp", code: `#include <iostream>\n\nusing namespace std;\n\nint main() {\n  cout << "Hello World!" << endl;\n}`, isTranslationUnit: true }
-    ], new Project_1.Exercise([
-        new checkpoints_1.OutputCheckpoint('Print "Hello World!"', checkpoints_1.outputComparator("Hello World!", true))
-    ])).turnOnAutoCompile();
+    ], new Project_1.Exercise(exercises_1.makeExerciseSpecification({
+        checkpoints: [
+            new checkpoints_1.OutputCheckpoint('Print "Hello World!"', checkpoints_1.outputComparator("Hello World!", true))
+        ]
+    }))).turnOnAutoCompile();
 }
 function getProjectIdFromLocationHash() {
     let hash = window.location.hash;
@@ -64705,10 +64742,10 @@ function peg$parse(input, options) {
     const peg$c343 = function (args) { return track({ construct_type: "function_call_expression", args: args || [] }, location(), text()); };
     const peg$c344 = ".";
     const peg$c345 = peg$literalExpectation(".", false);
-    const peg$c346 = function (name) { return track({ construct_type: "dot_expression", member: name }, location(), text()); };
+    const peg$c346 = function (mem) { return track({ construct_type: "dot_expression", member: mem }, location(), text()); };
     const peg$c347 = "->";
     const peg$c348 = peg$literalExpectation("->", false);
-    const peg$c349 = function (name) { return track({ construct_type: "arrow_expression", member: name }, location(), text()); };
+    const peg$c349 = function (mem) { return track({ construct_type: "arrow_expression", member: mem }, location(), text()); };
     const peg$c350 = function () { return track({ construct_type: "postfix_increment_expression", operator: "++" }, location(), text()); };
     const peg$c351 = function () { return track({ construct_type: "postfix_increment_expression", operator: "--" }, location(), text()); };
     const peg$c352 = function (type, args) {
@@ -64853,19 +64890,28 @@ function peg$parse(input, options) {
     const peg$c475 = function (d) { d.pureVirtual = true; return d; };
     const peg$c476 = function (d) { d.library_unsupported = true; return d; };
     const peg$c477 = function (d, i) { d.initializer = i; return d; };
-    const peg$c478 = function (b) { return b; };
-    const peg$c479 = function (first, b) { return b; };
-    const peg$c480 = function (a) { return a; };
-    const peg$c481 = function (a, c) {
+    const peg$c478 = function (d, v) { return v; };
+    const peg$c479 = function (d, v, i) {
+        d[v] = true;
+        d.initializer = i;
+        return d;
+    };
+    const peg$c480 = function (d, v) { d[v] = true; return d; };
+    const peg$c481 = "override";
+    const peg$c482 = peg$literalExpectation("override", false);
+    const peg$c483 = function (b) { return b; };
+    const peg$c484 = function (first, b) { return b; };
+    const peg$c485 = function (a) { return a; };
+    const peg$c486 = function (a, c) {
         return track({ construct_type: "base_specifier", name: c, virtual: true, access: a }, location(), text());
     };
-    const peg$c482 = function (a, c) {
+    const peg$c487 = function (a, c) {
         return track({ construct_type: "base_specifier", name: c, access: a }, location(), text());
     };
-    const peg$c483 = function (c) {
+    const peg$c488 = function (c) {
         return track({ construct_type: "base_specifier", name: c }, location(), text());
     };
-    const peg$c484 = function (n, c) {
+    const peg$c489 = function (n, c) {
         n.push(c);
         return { construct_type: "qualified_identifier", components: n };
     };
@@ -67012,6 +67058,81 @@ function peg$parse(input, options) {
                 else {
                     peg$currPos = s0;
                     s0 = peg$FAILED;
+                }
+                if (s0 === peg$FAILED) {
+                    s0 = peg$currPos;
+                    s1 = peg$parsedecl_specifiers();
+                    if (s1 !== peg$FAILED) {
+                        s2 = peg$currPos;
+                        peg$silentFails++;
+                        s3 = peg$parseidentifier();
+                        peg$silentFails--;
+                        if (s3 === peg$FAILED) {
+                            s2 = undefined;
+                        }
+                        else {
+                            peg$currPos = s2;
+                            s2 = peg$FAILED;
+                        }
+                        if (s2 !== peg$FAILED) {
+                            s3 = peg$parsews();
+                            if (s3 !== peg$FAILED) {
+                                s4 = peg$parsemember_declarator();
+                                if (s4 !== peg$FAILED) {
+                                    s5 = peg$parsews();
+                                    if (s5 !== peg$FAILED) {
+                                        s6 = peg$parsector_initializer();
+                                        if (s6 === peg$FAILED) {
+                                            s6 = null;
+                                        }
+                                        if (s6 !== peg$FAILED) {
+                                            s7 = peg$parsews();
+                                            if (s7 !== peg$FAILED) {
+                                                s8 = peg$parseblock();
+                                                if (s8 !== peg$FAILED) {
+                                                    peg$savedPos = s0;
+                                                    s1 = peg$c72(s1, s4, s6, s8);
+                                                    s0 = s1;
+                                                }
+                                                else {
+                                                    peg$currPos = s0;
+                                                    s0 = peg$FAILED;
+                                                }
+                                            }
+                                            else {
+                                                peg$currPos = s0;
+                                                s0 = peg$FAILED;
+                                            }
+                                        }
+                                        else {
+                                            peg$currPos = s0;
+                                            s0 = peg$FAILED;
+                                        }
+                                    }
+                                    else {
+                                        peg$currPos = s0;
+                                        s0 = peg$FAILED;
+                                    }
+                                }
+                                else {
+                                    peg$currPos = s0;
+                                    s0 = peg$FAILED;
+                                }
+                            }
+                            else {
+                                peg$currPos = s0;
+                                s0 = peg$FAILED;
+                            }
+                        }
+                        else {
+                            peg$currPos = s0;
+                            s0 = peg$FAILED;
+                        }
+                    }
+                    else {
+                        peg$currPos = s0;
+                        s0 = peg$FAILED;
+                    }
                 }
             }
         }
@@ -74450,7 +74571,7 @@ function peg$parse(input, options) {
                 if (s1 !== peg$FAILED) {
                     s2 = peg$parsews();
                     if (s2 !== peg$FAILED) {
-                        s3 = peg$parsename();
+                        s3 = peg$parseid_expression();
                         if (s3 !== peg$FAILED) {
                             peg$savedPos = s0;
                             s1 = peg$c346(s3);
@@ -74485,7 +74606,7 @@ function peg$parse(input, options) {
                     if (s1 !== peg$FAILED) {
                         s2 = peg$parsews();
                         if (s2 !== peg$FAILED) {
-                            s3 = peg$parsename();
+                            s3 = peg$parseid_expression();
                             if (s3 !== peg$FAILED) {
                                 peg$savedPos = s0;
                                 s1 = peg$c349(s3);
@@ -74831,7 +74952,13 @@ function peg$parse(input, options) {
                     s0 = peg$FAILED;
                 }
                 if (s0 === peg$FAILED) {
-                    s0 = peg$parseexp_id();
+                    s0 = peg$currPos;
+                    s1 = peg$parseid_expression();
+                    if (s1 !== peg$FAILED) {
+                        peg$savedPos = s0;
+                        s1 = peg$c358(s1);
+                    }
+                    s0 = s1;
                     if (s0 === peg$FAILED) {
                         s0 = peg$parseopaque_expression();
                     }
@@ -74840,18 +74967,12 @@ function peg$parse(input, options) {
         }
         return s0;
     }
-    function peg$parseexp_id() {
-        let s0, s1;
-        s0 = peg$currPos;
-        s1 = peg$parsequalified_id();
-        if (s1 === peg$FAILED) {
-            s1 = peg$parsename();
+    function peg$parseid_expression() {
+        let s0;
+        s0 = peg$parsequalified_id();
+        if (s0 === peg$FAILED) {
+            s0 = peg$parsename();
         }
-        if (s1 !== peg$FAILED) {
-            peg$savedPos = s0;
-            s1 = peg$c358(s1);
-        }
-        s0 = s1;
         return s0;
     }
     function peg$parsequalified_id() {
@@ -77632,8 +77753,100 @@ function peg$parse(input, options) {
                     s0 = peg$FAILED;
                 }
                 if (s0 === peg$FAILED) {
-                    s0 = peg$parsedeclarator();
+                    s0 = peg$currPos;
+                    s1 = peg$parsedeclarator();
+                    if (s1 !== peg$FAILED) {
+                        s2 = peg$parsews();
+                        if (s2 !== peg$FAILED) {
+                            s3 = peg$currPos;
+                            s4 = peg$parsevirt_specifier();
+                            if (s4 !== peg$FAILED) {
+                                s5 = peg$parsews();
+                                if (s5 !== peg$FAILED) {
+                                    peg$savedPos = s3;
+                                    s4 = peg$c478(s1, s4);
+                                    s3 = s4;
+                                }
+                                else {
+                                    peg$currPos = s3;
+                                    s3 = peg$FAILED;
+                                }
+                            }
+                            else {
+                                peg$currPos = s3;
+                                s3 = peg$FAILED;
+                            }
+                            if (s3 !== peg$FAILED) {
+                                s4 = peg$parsebrace_or_equal_initializer();
+                                if (s4 !== peg$FAILED) {
+                                    peg$savedPos = s0;
+                                    s1 = peg$c479(s1, s3, s4);
+                                    s0 = s1;
+                                }
+                                else {
+                                    peg$currPos = s0;
+                                    s0 = peg$FAILED;
+                                }
+                            }
+                            else {
+                                peg$currPos = s0;
+                                s0 = peg$FAILED;
+                            }
+                        }
+                        else {
+                            peg$currPos = s0;
+                            s0 = peg$FAILED;
+                        }
+                    }
+                    else {
+                        peg$currPos = s0;
+                        s0 = peg$FAILED;
+                    }
+                    if (s0 === peg$FAILED) {
+                        s0 = peg$currPos;
+                        s1 = peg$parsedeclarator();
+                        if (s1 !== peg$FAILED) {
+                            s2 = peg$parsews();
+                            if (s2 !== peg$FAILED) {
+                                s3 = peg$parsevirt_specifier();
+                                if (s3 !== peg$FAILED) {
+                                    peg$savedPos = s0;
+                                    s1 = peg$c480(s1, s3);
+                                    s0 = s1;
+                                }
+                                else {
+                                    peg$currPos = s0;
+                                    s0 = peg$FAILED;
+                                }
+                            }
+                            else {
+                                peg$currPos = s0;
+                                s0 = peg$FAILED;
+                            }
+                        }
+                        else {
+                            peg$currPos = s0;
+                            s0 = peg$FAILED;
+                        }
+                        if (s0 === peg$FAILED) {
+                            s0 = peg$parsedeclarator();
+                        }
+                    }
                 }
+            }
+        }
+        return s0;
+    }
+    function peg$parsevirt_specifier() {
+        let s0;
+        if (input.substr(peg$currPos, 8) === peg$c481) {
+            s0 = peg$c481;
+            peg$currPos += 8;
+        }
+        else {
+            s0 = peg$FAILED;
+            if (peg$silentFails === 0) {
+                peg$fail(peg$c482);
             }
         }
         return s0;
@@ -77657,7 +77870,7 @@ function peg$parse(input, options) {
                 s3 = peg$parsebase_specifier_list();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c478(s3);
+                    s1 = peg$c483(s3);
                     s0 = s1;
                 }
                 else {
@@ -77701,7 +77914,7 @@ function peg$parse(input, options) {
                         s7 = peg$parsebase_specifier();
                         if (s7 !== peg$FAILED) {
                             peg$savedPos = s3;
-                            s4 = peg$c479(s1, s7);
+                            s4 = peg$c484(s1, s7);
                             s3 = s4;
                         }
                         else {
@@ -77744,7 +77957,7 @@ function peg$parse(input, options) {
                             s7 = peg$parsebase_specifier();
                             if (s7 !== peg$FAILED) {
                                 peg$savedPos = s3;
-                                s4 = peg$c479(s1, s7);
+                                s4 = peg$c484(s1, s7);
                                 s3 = s4;
                             }
                             else {
@@ -77805,7 +78018,7 @@ function peg$parse(input, options) {
                     s5 = peg$parseWS();
                     if (s5 !== peg$FAILED) {
                         peg$savedPos = s3;
-                        s4 = peg$c480(s4);
+                        s4 = peg$c485(s4);
                         s3 = s4;
                     }
                     else {
@@ -77821,7 +78034,7 @@ function peg$parse(input, options) {
                     s4 = peg$parsequalified_class_name();
                     if (s4 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c481(s3, s4);
+                        s1 = peg$c486(s3, s4);
                         s0 = s1;
                     }
                     else {
@@ -77851,7 +78064,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseWS();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s1;
-                    s2 = peg$c480(s2);
+                    s2 = peg$c485(s2);
                     s1 = s2;
                 }
                 else {
@@ -77880,7 +78093,7 @@ function peg$parse(input, options) {
                         s4 = peg$parsequalified_class_name();
                         if (s4 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c481(s1, s4);
+                            s1 = peg$c486(s1, s4);
                             s0 = s1;
                         }
                         else {
@@ -77911,7 +78124,7 @@ function peg$parse(input, options) {
                         s3 = peg$parsequalified_class_name();
                         if (s3 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c482(s1, s3);
+                            s1 = peg$c487(s1, s3);
                             s0 = s1;
                         }
                         else {
@@ -77933,7 +78146,7 @@ function peg$parse(input, options) {
                     s1 = peg$parsequalified_class_name();
                     if (s1 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c483(s1);
+                        s1 = peg$c488(s1);
                     }
                     s0 = s1;
                 }
@@ -77951,7 +78164,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseclass_name();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c484(s1, s3);
+                    s1 = peg$c489(s1, s3);
                     s0 = s1;
                 }
                 else {
@@ -78522,6 +78735,135 @@ exports.InstantMemoryDiagramOutlet = InstantMemoryDiagramOutlet;
 
 /***/ }),
 
+/***/ 4229:
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SimpleExerciseLobsterOutlet = void 0;
+const simOutlets_1 = __webpack_require__(9357);
+const editors_1 = __webpack_require__(7364);
+const Simulation_1 = __webpack_require__(2295);
+const observe_1 = __webpack_require__(5114);
+const checkpointOutlets_1 = __webpack_require__(8283);
+const InstantMemoryDiagramOutlet_1 = __webpack_require__(3927);
+class SimpleExerciseLobsterOutlet {
+    constructor(element, project) {
+        this.element = element;
+        // Set up simulation and source tabs
+        // var sourceTab = element.find(".sourceTab");
+        // var simTab = element.find(".simTab");
+        this.tabsElem = element.find(".lobster-simulation-outlet-tabs");
+        // TODO: HACK to make codeMirror refresh correctly when sourcePane becomes visible
+        this.tabsElem.find('a.lobster-source-tab').on("shown.bs.tab", () => {
+            this.projectEditor.refreshEditorView();
+        });
+        this.simulationOutlet = new simOutlets_1.SimulationOutlet(element.find(".lobster-sim-pane"));
+        this.simulateTabElem = element.find(".lobster-simulate-tab");
+        this.setSimulationTabEnabled(false);
+        let runButtonElem = element.find(".runButton")
+            .click(() => {
+            let program = this.project.program;
+            if (program.isRunnable()) {
+                let sim = new Simulation_1.Simulation(program);
+                while (!sim.globalAllocator.isDone) {
+                    sim.stepForward(); // TODO: put this loop in simulation runners in function to skip stuff before main
+                }
+                this.setSimulation(sim);
+            }
+            this.simulateTabElem.tab("show");
+        });
+        this.projectEditor = new editors_1.ProjectEditor(element.find(".lobster-source-pane"), project);
+        this.compilationOutlet = new editors_1.CompilationOutlet(element.find(".lobster-compilation-pane"), project);
+        this.compilationStatusOutlet = new editors_1.CompilationStatusOutlet(element.find(".compilation-status-outlet"), project);
+        this.checkpointsOutlet = new checkpointOutlets_1.CheckpointsOutlet(element.find(".lobster-ex-checkpoints"), project.exercise);
+        let IMDOElem = element.find(".lobster-instant-memory-diagram");
+        this.instantMemoryDiagramOutlet = new InstantMemoryDiagramOutlet_1.InstantMemoryDiagramOutlet(IMDOElem, project, false);
+        this.isInstantMemoryDiagramActive = false;
+        element.find(".lobster-instant-memory-diagram-buttons button").on("click", () => {
+            ["active", "btn-default", "btn-primary"].forEach(c => element.find(".lobster-instant-memory-diagram-buttons button").toggleClass(c));
+            this.isInstantMemoryDiagramActive = !this.isInstantMemoryDiagramActive;
+            this.instantMemoryDiagramOutlet.setActive(this.isInstantMemoryDiagramActive);
+            if (this.isInstantMemoryDiagramActive) {
+                IMDOElem.show();
+            }
+            else {
+                IMDOElem.hide();
+            }
+        });
+        this.project = project;
+    }
+    setProject(project) {
+        this.project = project;
+        this.projectEditor.setProject(project);
+        this.compilationOutlet.setProject(project);
+        this.compilationStatusOutlet.setProject(project);
+        this.checkpointsOutlet.setExercise(project.exercise);
+        this.instantMemoryDiagramOutlet.setProject(project);
+        return this.project;
+    }
+    setSimulation(sim) {
+        this.clearSimulation();
+        this.sim = sim;
+        observe_1.listenTo(this, sim);
+        this.simulationOutlet.setSimulation(sim);
+        this.setSimulationTabEnabled(true);
+    }
+    clearSimulation() {
+        this.setSimulationTabEnabled(false);
+        this.simulationOutlet.clearSimulation();
+        if (this.sim) {
+            observe_1.stopListeningTo(this, this.sim);
+        }
+        delete this.sim;
+    }
+    // private hideAnnotationMessage() {
+    //     this.annotationMessagesElem.css("top", "125px");
+    //     if (this.afterAnnotation.length > 0) {
+    //         this.afterAnnotation.forEach(fn => fn());
+    //         this.afterAnnotation.length = 0;
+    //     }
+    // }
+    requestFocus(msg) {
+        if (msg.source === this.projectEditor) {
+            this.tabsElem.find('a.lobster-source-tab').tab("show");
+        }
+    }
+    beforeStepForward(msg) {
+        var oldGets = $(".code-memoryObject .get");
+        var oldSets = $(".code-memoryObject .set");
+        setTimeout(() => {
+            oldGets.removeClass("get");
+            oldSets.removeClass("set");
+        }, 300);
+    }
+    setSimulationTabEnabled(isEnabled) {
+        if (isEnabled) {
+            this.simulateTabElem.parent().removeClass("disabled");
+        }
+        else {
+            this.simulateTabElem.parent().addClass("disabled");
+        }
+    }
+}
+__decorate([
+    observe_1.messageResponse("requestFocus")
+], SimpleExerciseLobsterOutlet.prototype, "requestFocus", null);
+__decorate([
+    observe_1.messageResponse("beforeStepForward")
+], SimpleExerciseLobsterOutlet.prototype, "beforeStepForward", null);
+exports.SimpleExerciseLobsterOutlet = SimpleExerciseLobsterOutlet;
+
+
+/***/ }),
+
 /***/ 8283:
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
@@ -78548,9 +78890,8 @@ const observe_1 = __webpack_require__(5114);
 const util_1 = __webpack_require__(6560);
 // TODO: this should probably STORE and listen to Exercise rather than Project?
 class CheckpointsOutlet {
-    constructor(element, exercise, completeMessage) {
+    constructor(element, exercise) {
         this.element = element;
-        this.completeMessage = completeMessage;
         this.checkpointsContainerElem = element.find(".panel-body");
         this.headerElem = element.find(".panel-heading").html("Exercise Progress");
         this.exercise = this.setExercise(exercise);
@@ -78577,13 +78918,14 @@ class CheckpointsOutlet {
         return __awaiter(this, void 0, void 0, function* () {
             util_1.assert(exercise);
             let checkpoints = exercise.checkpoints;
-            let statuses = exercise.checkpointStatuses;
+            let finished = exercise.checkpointEvaluationsFinished;
+            let completions = exercise.checkpointCompletions;
             this.checkpointsContainerElem.empty();
-            checkpoints.map((c, i) => new CheckpointOutlet($(`<span class="lobster-checkpoint"></span>`).appendTo(this.checkpointsContainerElem), c.name, statuses[i] ? "complete" : "incomplete"));
+            checkpoints.map((c, i) => new CheckpointOutlet($(`<span class="lobster-checkpoint"></span>`).appendTo(this.checkpointsContainerElem), c.name, finished[i] ? (completions[i] ? "complete" : "incomplete") : "thinking"));
             // TODO remove special cases here, set completion policy
             // if (statuses.every(Boolean) || this.exercise.name !== "ch13_03_ex" && this.exercise.name !== "ch13_04_ex" && statuses[statuses.length - 1]) {
-            if (statuses[statuses.length - 1]) {
-                this.headerElem.html(`<b>${this.completeMessage}</b>`);
+            if (exercise.isComplete) {
+                this.headerElem.html(`<b>${this.exercise.completionMessage}</b>`);
                 this.element.removeClass("panel-default");
                 this.element.removeClass("panel-danger");
                 this.element.addClass("panel-success");
@@ -78605,7 +78947,7 @@ class CheckpointsOutlet {
     }
 }
 __decorate([
-    observe_1.messageResponse("checkpointEvaluationStarted", "unwrap")
+    observe_1.messageResponse("allCheckpointEvaluationStarted", "unwrap")
 ], CheckpointsOutlet.prototype, "onCheckpointEvaluationStarted", null);
 __decorate([
     observe_1.messageResponse("checkpointEvaluationFinished", "unwrap")
@@ -80879,7 +81221,6 @@ const simulationRunners_1 = __webpack_require__(9108);
 const entities_1 = __webpack_require__(8397);
 const codeOutlets_1 = __webpack_require__(3004);
 const functions_1 = __webpack_require__(2367);
-const Project_1 = __webpack_require__(8367);
 const FADE_DURATION = 300;
 const SLIDE_DURATION = 400;
 const VALUE_TRANSFER_DURATION = 500;
@@ -81256,7 +81597,7 @@ __decorate([
 ], SimulationOutlet.prototype, "atEnded", null);
 exports.SimulationOutlet = SimulationOutlet;
 class DefaultLobsterOutlet {
-    constructor(element, project = new Project_1.Project("unnammed project", undefined, [], new Project_1.Exercise([]))) {
+    constructor(element, project) {
         this.element = element;
         this.project = project;
         // Set up simulation and source tabs
