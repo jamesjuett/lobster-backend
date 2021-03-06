@@ -42778,302 +42778,47 @@ exports.findLoopControlVars = findLoopControlVars;
 
 /***/ }),
 
-/***/ 3069:
+/***/ 3044:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RuntimeFunctionCallExpression = exports.INDEX_FUNCTION_CALL_EXPRESSION_RETURN = exports.INDEX_FUNCTION_CALL_EXPRESSION_CALL = exports.INDEX_FUNCTION_CALL_EXPRESSION_OPERAND = exports.FunctionCallExpression = void 0;
-const constructs_1 = __webpack_require__(4293);
-const PotentialFullExpression_1 = __webpack_require__(2593);
-const entities_1 = __webpack_require__(8397);
-const expressions_1 = __webpack_require__(6597);
-const types_1 = __webpack_require__(8716);
-const errors_1 = __webpack_require__(5244);
-const expressionBase_1 = __webpack_require__(9180);
-const lexical_1 = __webpack_require__(2018);
-const codeOutlets_1 = __webpack_require__(3004);
-// type FunctionResultType<T extends FunctionType> = NoRefType<Exclude<T["returnType"], VoidType>>; // TODO: this isn't used? should I use it somewhere?
-// type ReturnTypeVC<RT extends PotentialReturnType> = RT extends ReferenceType ? "lvalue" : "prvalue";
-class FunctionCallExpression extends expressionBase_1.Expression {
-    constructor(context, ast, operand, args) {
-        super(context, ast);
-        this.construct_type = "function_call_expression";
-        this.attach(this.operand = operand);
-        this.originalArgs = args;
-        // If any arguments are not well typed, we can't select a function.
-        if (!expressionBase_1.allWellTyped(args)) {
-            // type, valueCategory, and call remain undefined
-            this.attachAll(args);
-            return;
-        }
-        if (!(operand instanceof expressions_1.IdentifierExpression || operand instanceof expressions_1.DotExpression || operand instanceof expressions_1.ArrowExpression)) {
-            this.addNote(errors_1.CPPError.expr.functionCall.invalid_operand_expression(this, operand));
-            this.attachAll(args);
-            return;
-        }
-        if (!operand.entity) {
-            // type, valueCategory, and call remain undefined
-            // operand will already have an error about the failed lookup
-            this.attachAll(args);
-            return;
-        }
-        if (!(operand.entity instanceof entities_1.FunctionEntity)) {
-            // type, valueCategory, and call remain undefined
-            this.addNote(errors_1.CPPError.expr.functionCall.operand(this, operand.entity));
-            this.attachAll(args);
-            return;
-        }
-        if (!operand.entity.returnsCompleteType()) {
-            this.attachAll(args);
-            this.addNote(errors_1.CPPError.expr.functionCall.incomplete_return_type(this, operand.entity.type.returnType));
-            return;
-        }
-        let returnType = operand.entity.type.returnType;
-        this.type = types_1.peelReference(returnType);
-        this.valueCategory = returnType instanceof types_1.ReferenceType ? "lvalue" : "prvalue";
-        // let staticReceiver: ObjectEntity<CompleteClassType> | undefined;
-        // if (operand instanceof DotExpression) {
-        //     staticReceiver = operand.functionCallReceiver;
-        // }
-        // If we get to here, we don't attach the args directly since they will be attached under the function call.
-        this.attach(this.call = new PotentialFullExpression_1.FunctionCall(context, operand.entity, args, operand.context.contextualReceiverType));
-    }
-    static createFromAST(ast, context) {
-        let args = ast.args.map(arg => expressions_1.createExpressionFromAST(arg, context));
-        if (ast.operand.construct_type === "identifier_expression") {
-            let identifierStr = lexical_1.identifierToString(lexical_1.astToIdentifier(ast.operand.identifier));
-            if (lexical_1.LOBSTER_MAGIC_FUNCTIONS.has(identifierStr)) {
-                return new expressions_1.MagicFunctionCallExpression(context, ast, identifierStr, args);
-            }
-        }
-        let contextualParamTypes = args.map(arg => arg.type);
-        return new FunctionCallExpression(context, ast, expressions_1.createExpressionFromAST(ast.operand, constructs_1.createExpressionContextWithParameterTypes(context, contextualParamTypes)), args);
-    }
-    createDefaultOutlet(element, parent) {
-        return new codeOutlets_1.FunctionCallExpressionOutlet(element, this, parent);
-    }
-    // TODO
-    describeEvalResult(depth) {
-        throw new Error("Method not implemented.");
-    }
+exports.parseNumericLiteralValueFromAST = void 0;
+const util_1 = __webpack_require__(6560);
+function parseCPPChar(litValue) {
+    return util_1.escapeString(litValue).charCodeAt(0);
 }
-exports.FunctionCallExpression = FunctionCallExpression;
-exports.INDEX_FUNCTION_CALL_EXPRESSION_OPERAND = 0;
-exports.INDEX_FUNCTION_CALL_EXPRESSION_CALL = 1;
-exports.INDEX_FUNCTION_CALL_EXPRESSION_RETURN = 2;
-class RuntimeFunctionCallExpression extends expressionBase_1.RuntimeExpression {
-    constructor(model, parent) {
-        super(model, parent);
-        this.index = exports.INDEX_FUNCTION_CALL_EXPRESSION_OPERAND;
-        this.operand = expressions_1.createRuntimeExpression(this.model.operand, this);
-    }
-    upNextImpl() {
-        if (this.index === exports.INDEX_FUNCTION_CALL_EXPRESSION_OPERAND) {
-            this.sim.push(this.operand);
-            this.index = exports.INDEX_FUNCTION_CALL_EXPRESSION_CALL;
-        }
-        else if (this.index === exports.INDEX_FUNCTION_CALL_EXPRESSION_CALL) {
-            // We check the contextual receiver here since it changes after the operand is evaluated.
-            this.call = this.model.call.createRuntimeFunctionCall(this, this.operand.contextualReceiver);
-            this.sim.push(this.call);
-            this.index = exports.INDEX_FUNCTION_CALL_EXPRESSION_RETURN;
-        }
-        else if (this.index === exports.INDEX_FUNCTION_CALL_EXPRESSION_RETURN) {
-            // Note: cannot use this.model.type here, since that is the type of the function
-            // call expression, which would have had the reference type removed if this was return
-            // by reference. Instead, use the return type of the called function itself, which will have
-            // the reference type intact.
-            let returnType = this.model.call.func.type.returnType;
-            if (returnType.isVoidType()) {
-                // this.setEvalResult(null); // TODO: type system won't allow this currently
-            }
-            else if (returnType.isReferenceType()) {
-                // Return by reference is lvalue and yields the returned object
-                let retObj = this.call.calledFunction.returnObject;
-                this.setEvalResult(retObj);
-            }
-            else if (returnType.isAtomicType()) {
-                // Return by value of atomic type. In this case, we can look up
-                // the value of the return object and use that as the eval result
-                let retObj = this.call.calledFunction.returnObject;
-                this.setEvalResult(retObj.getValue());
-            }
-            else {
-                // Return by value of a non-atomic type. In this case, it's still a prvalue
-                // but is the temporary object rather than its value.
-                let retObj = this.call.calledFunction.returnObject;
-                this.setEvalResult(retObj);
-            }
-            this.startCleanup();
-        }
-    }
-    stepForwardImpl() {
-        // nothing to do
-    }
+;
+const literalJSParse = {
+    "int": parseInt,
+    "float": parseFloat,
+    "double": parseFloat,
+    "bool": (b) => (b ? 1 : 0),
+    "char": parseCPPChar
+};
+function parseNumericLiteralValueFromAST(ast) {
+    return literalJSParse[ast.type](ast.value);
 }
-exports.RuntimeFunctionCallExpression = RuntimeFunctionCallExpression;
+exports.parseNumericLiteralValueFromAST = parseNumericLiteralValueFromAST;
 
 
 /***/ }),
 
-/***/ 2593:
+/***/ 20:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RuntimeFunctionCall = exports.INDEX_FUNCTION_CALL_RETURN = exports.INDEX_FUNCTION_CALL_CALL = exports.INDEX_FUNCTION_CALL_ARGUMENTS = exports.INDEX_FUNCTION_CALL_PUSH = exports.FunctionCall = exports.RuntimeTemporaryDeallocator = exports.TemporaryDeallocator = exports.RuntimePotentialFullExpression = exports.PotentialFullExpression = void 0;
+exports.RuntimeFunctionCall = exports.INDEX_FUNCTION_CALL_RETURN = exports.INDEX_FUNCTION_CALL_CALL = exports.INDEX_FUNCTION_CALL_ARGUMENTS = exports.INDEX_FUNCTION_CALL_PUSH = exports.FunctionCall = void 0;
 const entities_1 = __webpack_require__(8397);
 const util_1 = __webpack_require__(6560);
 const types_1 = __webpack_require__(8716);
-const constructs_1 = __webpack_require__(4293);
 const errors_1 = __webpack_require__(5244);
 const initializers_1 = __webpack_require__(1288);
-class PotentialFullExpression extends constructs_1.BasicCPPConstruct {
-    constructor() {
-        super(...arguments);
-        this.temporaryObjects = [];
-    }
-    onAttach(parent) {
-        this.parent = parent;
-        // This may no longer be a full expression. If so, move temporary entities to
-        // their new full expression.
-        if (!this.isFullExpression()) {
-            let fe = this.findFullExpression();
-            this.temporaryObjects.forEach((tempEnt) => {
-                fe.addTemporaryObject(tempEnt);
-            });
-            this.temporaryObjects.length = 0; // clear array
-        }
-        // Now that we are attached, the assumption is no more temporary entities
-        // will be added to this construct or its attached children. (There's an
-        // assert in addTemporaryObject() to prevent this.) That means it is now
-        // safe to compile and add the temporary deallocator construct as a child.
-        if (this.temporaryObjects.length > 0) {
-            this.temporaryDeallocator = new TemporaryDeallocator(this.context, this.temporaryObjects);
-            this.attach(this.temporaryDeallocator);
-        }
-    }
-    isFullExpression() {
-        return !this.parent || !(this.parent instanceof PotentialFullExpression);
-    }
-    // TODO: this function can probably be cleaned up so that it doesn't require these ugly runtime checks
-    /**
-     * Returns the nearest full expression containing this expression (possibly itself).
-     * @param inst
-     */
-    findFullExpression() {
-        if (this.isFullExpression()) {
-            return this;
-        }
-        if (!this.parent || !(this.parent instanceof PotentialFullExpression)) {
-            return util_1.assertFalse("failed to find full expression for " + this);
-        }
-        return this.parent.findFullExpression();
-    }
-    addTemporaryObject(tempObjEnt) {
-        util_1.assert(!this.parent, "Temporary objects may not be added to a full expression after it has been attached.");
-        this.temporaryObjects.push(tempObjEnt);
-        tempObjEnt.setOwner(this);
-    }
-    createTemporaryObject(type, name) {
-        let fe = this.findFullExpression();
-        var tempObjEnt = new entities_1.TemporaryObjectEntity(type, this, fe, name);
-        this.temporaryObjects[tempObjEnt.entityId] = tempObjEnt;
-        return tempObjEnt;
-    }
-}
-exports.PotentialFullExpression = PotentialFullExpression;
-class RuntimePotentialFullExpression extends constructs_1.RuntimeConstruct {
-    constructor(model, stackType, parent) {
-        super(model, stackType, parent);
-        this.temporaryObjects = {};
-        if (this.model.temporaryDeallocator) {
-            this.temporaryDeallocator = this.model.temporaryDeallocator.createRuntimeConstruct(this);
-            this.setCleanupConstruct(this.temporaryDeallocator);
-        }
-        this.containingFullExpression = this.findFullExpression();
-    }
-    findFullExpression() {
-        let rt = this;
-        while (rt instanceof RuntimePotentialFullExpression && !rt.model.isFullExpression() && rt.parent) {
-            rt = rt.parent;
-        }
-        if (rt instanceof RuntimePotentialFullExpression) {
-            return rt;
-        }
-        else {
-            return util_1.assertFalse();
-        }
-    }
-}
-exports.RuntimePotentialFullExpression = RuntimePotentialFullExpression;
-class TemporaryDeallocator extends constructs_1.BasicCPPConstruct {
-    constructor(context, temporaryObjects) {
-        super(context, undefined); // Has no AST
-        this.construct_type = "TemporaryDeallocator";
-        this.temporaryObjects = temporaryObjects;
-        this.dtors = temporaryObjects.map((temp) => {
-            if (temp.isTyped(types_1.isCompleteClassType)) {
-                let dtor = temp.type.classDefinition.destructor;
-                if (dtor) {
-                    let dtorCall = new FunctionCall(context, dtor, [], temp.type);
-                    this.attach(dtorCall);
-                    return dtorCall;
-                }
-                else {
-                    this.addNote(errors_1.CPPError.declaration.dtor.no_destructor_temporary(temp.owner, temp));
-                }
-            }
-            return undefined;
-        });
-    }
-    createRuntimeConstruct(parent) {
-        return new RuntimeTemporaryDeallocator(this, parent);
-    }
-}
-exports.TemporaryDeallocator = TemporaryDeallocator;
-class RuntimeTemporaryDeallocator extends constructs_1.RuntimeConstruct {
-    constructor(model, parent) {
-        super(model, "expression", parent);
-        this.index = 0;
-        this.justDestructed = undefined;
-    }
-    upNextImpl() {
-        let tempObjects = this.model.temporaryObjects;
-        if (this.justDestructed) {
-            this.sim.memory.killObject(this.justDestructed, this);
-            this.justDestructed = undefined;
-        }
-        while (this.index < tempObjects.length) {
-            // Destroy temp at given index
-            let temp = tempObjects[this.index];
-            let dtor = this.model.dtors[this.index];
-            ++this.index;
-            if (temp.isTyped(types_1.isCompleteClassType)) {
-                // a temp class-type object, so we call the dtor
-                util_1.assert(dtor);
-                let obj = temp.runtimeLookup(this.parent);
-                this.sim.push(dtor.createRuntimeFunctionCall(this, obj));
-                // need to destroy the object once dtor is done, so we keep track of it here
-                this.justDestructed = obj;
-                // return so that the dtor, which is now on top of the stack, can run instead
-                return;
-            }
-            else {
-                // a temp non-class-type object, no dtor needed.
-                this.sim.memory.killObject(temp.runtimeLookup(this.parent), this);
-            }
-        }
-        this.startCleanup();
-    }
-    stepForwardImpl() {
-    }
-}
-exports.RuntimeTemporaryDeallocator = RuntimeTemporaryDeallocator;
-class FunctionCall extends PotentialFullExpression {
+const PotentialFullExpression_1 = __webpack_require__(2593);
+class FunctionCall extends PotentialFullExpression_1.PotentialFullExpression {
     /**
      * A FunctionEntity must be provided to specify which function is being called. The
      * return type of that function must be complete (if it's not, such a function call
@@ -43214,7 +42959,7 @@ exports.INDEX_FUNCTION_CALL_PUSH = 0;
 exports.INDEX_FUNCTION_CALL_ARGUMENTS = 1;
 exports.INDEX_FUNCTION_CALL_CALL = 2;
 exports.INDEX_FUNCTION_CALL_RETURN = 3;
-class RuntimeFunctionCall extends RuntimePotentialFullExpression {
+class RuntimeFunctionCall extends PotentialFullExpression_1.RuntimePotentialFullExpression {
     constructor(model, parent, receiver) {
         super(model, "call", parent);
         this.receiver = receiver;
@@ -43279,6 +43024,305 @@ exports.RuntimeFunctionCall = RuntimeFunctionCall;
 
 /***/ }),
 
+/***/ 3069:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.RuntimeFunctionCallExpression = exports.INDEX_FUNCTION_CALL_EXPRESSION_RETURN = exports.INDEX_FUNCTION_CALL_EXPRESSION_CALL = exports.INDEX_FUNCTION_CALL_EXPRESSION_OPERAND = exports.FunctionCallExpression = void 0;
+const constructs_1 = __webpack_require__(4293);
+const FunctionCall_1 = __webpack_require__(20);
+const entities_1 = __webpack_require__(8397);
+const expressions_1 = __webpack_require__(6597);
+const types_1 = __webpack_require__(8716);
+const errors_1 = __webpack_require__(5244);
+const expressionBase_1 = __webpack_require__(9180);
+const lexical_1 = __webpack_require__(2018);
+const codeOutlets_1 = __webpack_require__(3004);
+// type FunctionResultType<T extends FunctionType> = NoRefType<Exclude<T["returnType"], VoidType>>; // TODO: this isn't used? should I use it somewhere?
+// type ReturnTypeVC<RT extends PotentialReturnType> = RT extends ReferenceType ? "lvalue" : "prvalue";
+class FunctionCallExpression extends expressionBase_1.Expression {
+    constructor(context, ast, operand, args) {
+        super(context, ast);
+        this.construct_type = "function_call_expression";
+        this.attach(this.operand = operand);
+        this.originalArgs = args;
+        // If any arguments are not well typed, we can't select a function.
+        if (!expressionBase_1.allWellTyped(args)) {
+            // type, valueCategory, and call remain undefined
+            this.attachAll(args);
+            return;
+        }
+        if (!(operand instanceof expressions_1.IdentifierExpression || operand instanceof expressions_1.DotExpression || operand instanceof expressions_1.ArrowExpression)) {
+            this.addNote(errors_1.CPPError.expr.functionCall.invalid_operand_expression(this, operand));
+            this.attachAll(args);
+            return;
+        }
+        if (!operand.entity) {
+            // type, valueCategory, and call remain undefined
+            // operand will already have an error about the failed lookup
+            this.attachAll(args);
+            return;
+        }
+        if (!(operand.entity instanceof entities_1.FunctionEntity)) {
+            // type, valueCategory, and call remain undefined
+            this.addNote(errors_1.CPPError.expr.functionCall.operand(this, operand.entity));
+            this.attachAll(args);
+            return;
+        }
+        if (!operand.entity.returnsCompleteType()) {
+            this.attachAll(args);
+            this.addNote(errors_1.CPPError.expr.functionCall.incomplete_return_type(this, operand.entity.type.returnType));
+            return;
+        }
+        let returnType = operand.entity.type.returnType;
+        this.type = types_1.peelReference(returnType);
+        this.valueCategory = returnType instanceof types_1.ReferenceType ? "lvalue" : "prvalue";
+        // let staticReceiver: ObjectEntity<CompleteClassType> | undefined;
+        // if (operand instanceof DotExpression) {
+        //     staticReceiver = operand.functionCallReceiver;
+        // }
+        // If we get to here, we don't attach the args directly since they will be attached under the function call.
+        this.attach(this.call = new FunctionCall_1.FunctionCall(context, operand.entity, args, operand.context.contextualReceiverType));
+    }
+    static createFromAST(ast, context) {
+        let args = ast.args.map(arg => expressions_1.createExpressionFromAST(arg, context));
+        if (ast.operand.construct_type === "identifier_expression") {
+            let identifierStr = lexical_1.identifierToString(lexical_1.astToIdentifier(ast.operand.identifier));
+            if (lexical_1.LOBSTER_MAGIC_FUNCTIONS.has(identifierStr)) {
+                return new expressions_1.MagicFunctionCallExpression(context, ast, identifierStr, args);
+            }
+        }
+        let contextualParamTypes = args.map(arg => arg.type);
+        return new FunctionCallExpression(context, ast, expressions_1.createExpressionFromAST(ast.operand, constructs_1.createExpressionContextWithParameterTypes(context, contextualParamTypes)), args);
+    }
+    createDefaultOutlet(element, parent) {
+        return new codeOutlets_1.FunctionCallExpressionOutlet(element, this, parent);
+    }
+    // TODO
+    describeEvalResult(depth) {
+        throw new Error("Method not implemented.");
+    }
+}
+exports.FunctionCallExpression = FunctionCallExpression;
+exports.INDEX_FUNCTION_CALL_EXPRESSION_OPERAND = 0;
+exports.INDEX_FUNCTION_CALL_EXPRESSION_CALL = 1;
+exports.INDEX_FUNCTION_CALL_EXPRESSION_RETURN = 2;
+class RuntimeFunctionCallExpression extends expressionBase_1.RuntimeExpression {
+    constructor(model, parent) {
+        super(model, parent);
+        this.index = exports.INDEX_FUNCTION_CALL_EXPRESSION_OPERAND;
+        this.operand = expressions_1.createRuntimeExpression(this.model.operand, this);
+    }
+    upNextImpl() {
+        if (this.index === exports.INDEX_FUNCTION_CALL_EXPRESSION_OPERAND) {
+            this.sim.push(this.operand);
+            this.index = exports.INDEX_FUNCTION_CALL_EXPRESSION_CALL;
+        }
+        else if (this.index === exports.INDEX_FUNCTION_CALL_EXPRESSION_CALL) {
+            // We check the contextual receiver here since it changes after the operand is evaluated.
+            this.call = this.model.call.createRuntimeFunctionCall(this, this.operand.contextualReceiver);
+            this.sim.push(this.call);
+            this.index = exports.INDEX_FUNCTION_CALL_EXPRESSION_RETURN;
+        }
+        else if (this.index === exports.INDEX_FUNCTION_CALL_EXPRESSION_RETURN) {
+            // Note: cannot use this.model.type here, since that is the type of the function
+            // call expression, which would have had the reference type removed if this was return
+            // by reference. Instead, use the return type of the called function itself, which will have
+            // the reference type intact.
+            let returnType = this.model.call.func.type.returnType;
+            if (returnType.isVoidType()) {
+                // this.setEvalResult(null); // TODO: type system won't allow this currently
+            }
+            else if (returnType.isReferenceType()) {
+                // Return by reference is lvalue and yields the returned object
+                let retObj = this.call.calledFunction.returnObject;
+                this.setEvalResult(retObj);
+            }
+            else if (returnType.isAtomicType()) {
+                // Return by value of atomic type. In this case, we can look up
+                // the value of the return object and use that as the eval result
+                let retObj = this.call.calledFunction.returnObject;
+                this.setEvalResult(retObj.getValue());
+            }
+            else {
+                // Return by value of a non-atomic type. In this case, it's still a prvalue
+                // but is the temporary object rather than its value.
+                let retObj = this.call.calledFunction.returnObject;
+                this.setEvalResult(retObj);
+            }
+            this.startCleanup();
+        }
+    }
+    stepForwardImpl() {
+        // nothing to do
+    }
+}
+exports.RuntimeFunctionCallExpression = RuntimeFunctionCallExpression;
+
+
+/***/ }),
+
+/***/ 2593:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.RuntimeTemporaryDeallocator = exports.TemporaryDeallocator = exports.RuntimePotentialFullExpression = exports.PotentialFullExpression = void 0;
+const entities_1 = __webpack_require__(8397);
+const util_1 = __webpack_require__(6560);
+const types_1 = __webpack_require__(8716);
+const constructs_1 = __webpack_require__(4293);
+const errors_1 = __webpack_require__(5244);
+const FunctionCall_1 = __webpack_require__(20);
+class PotentialFullExpression extends constructs_1.BasicCPPConstruct {
+    constructor() {
+        super(...arguments);
+        this.temporaryObjects = [];
+    }
+    onAttach(parent) {
+        this.parent = parent;
+        // This may no longer be a full expression. If so, move temporary entities to
+        // their new full expression.
+        if (!this.isFullExpression()) {
+            let fe = this.findFullExpression();
+            this.temporaryObjects.forEach((tempEnt) => {
+                fe.addTemporaryObject(tempEnt);
+            });
+            this.temporaryObjects.length = 0; // clear array
+        }
+        // Now that we are attached, the assumption is no more temporary entities
+        // will be added to this construct or its attached children. (There's an
+        // assert in addTemporaryObject() to prevent this.) That means it is now
+        // safe to compile and add the temporary deallocator construct as a child.
+        if (this.temporaryObjects.length > 0) {
+            this.temporaryDeallocator = new TemporaryDeallocator(this.context, this.temporaryObjects);
+            this.attach(this.temporaryDeallocator);
+        }
+    }
+    isFullExpression() {
+        return !this.parent || !(this.parent instanceof PotentialFullExpression);
+    }
+    // TODO: this function can probably be cleaned up so that it doesn't require these ugly runtime checks
+    /**
+     * Returns the nearest full expression containing this expression (possibly itself).
+     * @param inst
+     */
+    findFullExpression() {
+        if (this.isFullExpression()) {
+            return this;
+        }
+        if (!this.parent || !(this.parent instanceof PotentialFullExpression)) {
+            return util_1.assertFalse("failed to find full expression for " + this);
+        }
+        return this.parent.findFullExpression();
+    }
+    addTemporaryObject(tempObjEnt) {
+        util_1.assert(!this.parent, "Temporary objects may not be added to a full expression after it has been attached.");
+        this.temporaryObjects.push(tempObjEnt);
+        tempObjEnt.setOwner(this);
+    }
+    createTemporaryObject(type, name) {
+        let fe = this.findFullExpression();
+        var tempObjEnt = new entities_1.TemporaryObjectEntity(type, this, fe, name);
+        this.temporaryObjects[tempObjEnt.entityId] = tempObjEnt;
+        return tempObjEnt;
+    }
+}
+exports.PotentialFullExpression = PotentialFullExpression;
+class RuntimePotentialFullExpression extends constructs_1.RuntimeConstruct {
+    constructor(model, stackType, parent) {
+        super(model, stackType, parent);
+        this.temporaryObjects = {};
+        if (this.model.temporaryDeallocator) {
+            this.temporaryDeallocator = this.model.temporaryDeallocator.createRuntimeConstruct(this);
+            this.setCleanupConstruct(this.temporaryDeallocator);
+        }
+        this.containingFullExpression = this.findFullExpression();
+    }
+    findFullExpression() {
+        let rt = this;
+        while (rt instanceof RuntimePotentialFullExpression && !rt.model.isFullExpression() && rt.parent) {
+            rt = rt.parent;
+        }
+        if (rt instanceof RuntimePotentialFullExpression) {
+            return rt;
+        }
+        else {
+            return util_1.assertFalse();
+        }
+    }
+}
+exports.RuntimePotentialFullExpression = RuntimePotentialFullExpression;
+class TemporaryDeallocator extends constructs_1.BasicCPPConstruct {
+    constructor(context, temporaryObjects) {
+        super(context, undefined); // Has no AST
+        this.construct_type = "TemporaryDeallocator";
+        this.temporaryObjects = temporaryObjects;
+        this.dtors = temporaryObjects.map((temp) => {
+            if (temp.isTyped(types_1.isCompleteClassType)) {
+                let dtor = temp.type.classDefinition.destructor;
+                if (dtor) {
+                    let dtorCall = new FunctionCall_1.FunctionCall(context, dtor, [], temp.type);
+                    this.attach(dtorCall);
+                    return dtorCall;
+                }
+                else {
+                    this.addNote(errors_1.CPPError.declaration.dtor.no_destructor_temporary(temp.owner, temp));
+                }
+            }
+            return undefined;
+        });
+    }
+    createRuntimeConstruct(parent) {
+        return new RuntimeTemporaryDeallocator(this, parent);
+    }
+}
+exports.TemporaryDeallocator = TemporaryDeallocator;
+class RuntimeTemporaryDeallocator extends constructs_1.RuntimeConstruct {
+    constructor(model, parent) {
+        super(model, "expression", parent);
+        this.index = 0;
+        this.justDestructed = undefined;
+    }
+    upNextImpl() {
+        let tempObjects = this.model.temporaryObjects;
+        if (this.justDestructed) {
+            this.sim.memory.killObject(this.justDestructed, this);
+            this.justDestructed = undefined;
+        }
+        while (this.index < tempObjects.length) {
+            // Destroy temp at given index
+            let temp = tempObjects[this.index];
+            let dtor = this.model.dtors[this.index];
+            ++this.index;
+            if (temp.isTyped(types_1.isCompleteClassType)) {
+                // a temp class-type object, so we call the dtor
+                util_1.assert(dtor);
+                let obj = temp.runtimeLookup(this.parent);
+                this.sim.push(dtor.createRuntimeFunctionCall(this, obj));
+                // need to destroy the object once dtor is done, so we keep track of it here
+                this.justDestructed = obj;
+                // return so that the dtor, which is now on top of the stack, can run instead
+                return;
+            }
+            else {
+                // a temp non-class-type object, no dtor needed.
+                this.sim.memory.killObject(temp.runtimeLookup(this.parent), this);
+            }
+        }
+        this.startCleanup();
+    }
+    stepForwardImpl() {
+    }
+}
+exports.RuntimeTemporaryDeallocator = RuntimeTemporaryDeallocator;
+
+
+/***/ }),
+
 /***/ 5386:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -43289,9 +43333,9 @@ exports.registerLibraryHeader = exports.TranslationUnit = exports.SourceReferenc
 const cpp_parser_1 = __webpack_require__(7413);
 const errors_1 = __webpack_require__(5244);
 const util_1 = __webpack_require__(6560);
-const declarations_1 = __webpack_require__(8963);
 const entities_1 = __webpack_require__(8397);
 const constructs_1 = __webpack_require__(4293);
+const declarations_1 = __webpack_require__(8963);
 /**
  *
  * The program also needs to know about all source files involved so that #include preprocessor
@@ -43829,13 +43873,6 @@ const LIBRARY_FILES = {
            : begin(other.begin), end(other.end) {}
         };
         
-    `, true),
-    iostream: new SourceFile("iostream.h", `
-        class ostream {};
-        ostream cout;
-        const char endl = '\\n';
-        class istream {};
-        istream cin;
     `, true)
 };
 function registerLibraryHeader(name, file) {
@@ -44531,6 +44568,7 @@ class SimulationInputStream {
         this.observable = new observe_1.Observable(this);
         this.trimws = true;
         this.buffer = "";
+        this.failbit = false;
     }
     // public readonly bufferAdditionRecord : readonly {readonly stepsTaken: number; readonly contents: string}[] = [];
     // public clone() {
@@ -44569,6 +44607,9 @@ class SimulationInputStream {
         if (types_1.isType(type, types_1.Char)) {
             return type.parse(this.extractCharFromBuffer());
         }
+        else if (types_1.isIntegralType(type)) {
+            return type.parse(this.extractIntFromBuffer());
+        }
         else {
             return type.parse(this.extractWordFromBuffer());
         }
@@ -44577,6 +44618,21 @@ class SimulationInputStream {
         let c = this.buffer.charAt(0);
         this.updateBuffer(this.buffer.substring(1));
         return c;
+    }
+    extractIntFromBuffer() {
+        let m = this.buffer.match(/^[0123456789+-]+/);
+        if (m) {
+            // match found
+            this.updateBuffer(this.buffer.substring(m[0].length));
+            return m[0];
+        }
+        else {
+            // error, no viable int at start of stream buffer
+            // (or stream buffer was empty)
+            // buffer contents are not changed
+            this.failbit = true;
+            return "0"; // return so that we'll parse a 0 according to C++ standard
+        }
     }
     extractWordFromBuffer() {
         let firstWhitespace = this.buffer.search(/\s/g);
@@ -44628,7 +44684,6 @@ const errors_1 = __webpack_require__(5244);
 const util_1 = __webpack_require__(6560);
 const observe_1 = __webpack_require__(5114);
 exports.EMPTY_SOURCE = { line: 0, column: 0, start: 0, end: 0, text: "" };
-;
 function createImplicitContext(context) {
     return Object.assign({}, context, { implicit: true });
 }
@@ -44665,9 +44720,9 @@ function isMemberFunctionContext(context) {
     return isFunctionContext(context) && !!context.contextualReceiverType;
 }
 exports.isMemberFunctionContext = isMemberFunctionContext;
-function createBlockContext(parentContext) {
+function createBlockContext(parentContext, sharedScope) {
     return Object.assign({}, parentContext, {
-        contextualScope: new entities_1.BlockScope(parentContext.translationUnit, parentContext.contextualScope),
+        contextualScope: sharedScope || new entities_1.BlockScope(parentContext.translationUnit, parentContext.contextualScope),
         blockLocals: new ContextualLocals()
     });
 }
@@ -45126,13 +45181,14 @@ const constructs_1 = __webpack_require__(4293);
 const errors_1 = __webpack_require__(5244);
 const util_1 = __webpack_require__(6560);
 const types_1 = __webpack_require__(8716);
-const initializers_1 = __webpack_require__(1288);
-const entities_1 = __webpack_require__(8397);
-const expressions_1 = __webpack_require__(6597);
-const statements_1 = __webpack_require__(7266);
-const lexical_1 = __webpack_require__(2018);
 const functions_1 = __webpack_require__(2367);
 const cpp_parser_util_1 = __webpack_require__(77);
+const ast_expressions_1 = __webpack_require__(3044);
+const entities_1 = __webpack_require__(8397);
+const expressions_1 = __webpack_require__(6597);
+const lexical_1 = __webpack_require__(2018);
+const statements_1 = __webpack_require__(7266);
+const initializers_1 = __webpack_require__(1288);
 class StorageSpecifier extends constructs_1.BasicCPPConstruct {
     constructor(context, specs) {
         super(context, undefined);
@@ -45150,9 +45206,6 @@ class StorageSpecifier extends constructs_1.BasicCPPConstruct {
         });
         if (this.static) {
             this.addNote(errors_1.CPPError.lobster.unsupported_feature(this, "static"));
-        }
-        if (this.extern) {
-            this.addNote(errors_1.CPPError.lobster.unsupported_feature(this, "extern"));
         }
         if (this.thread_local) {
             this.addNote(errors_1.CPPError.lobster.unsupported_feature(this, "thread_local"));
@@ -45454,6 +45507,7 @@ class SimpleDeclaration extends constructs_1.BasicCPPConstruct {
     constructor(context, ast, typeSpec, storageSpec, declarator, otherSpecs) {
         var _a;
         super(context, ast);
+        this.allowsExtern = false;
         this.attach(this.typeSpecifier = typeSpec);
         this.attach(this.storageSpecifier = storageSpec);
         this.otherSpecifiers = otherSpecs;
@@ -45467,6 +45521,9 @@ class SimpleDeclaration extends constructs_1.BasicCPPConstruct {
             else {
                 this.addNote(errors_1.CPPError.declaration.virtual_prohibited(this));
             }
+        }
+        if (this.storageSpecifier.extern && !this.allowsExtern) {
+            this.addNote(errors_1.CPPError.declaration.storage.extern_prohibited(this));
         }
     }
 }
@@ -45916,7 +45973,7 @@ class Declarator extends constructs_1.BasicCPPConstruct {
                         if (postfix.size) {
                             if (postfix.size.construct_type === "numeric_literal_expression") {
                                 // If the size specified is a literal, just use its value as array length
-                                type = new types_1.BoundedArrayType(type, expressions_1.parseNumericLiteralValueFromAST(postfix.size));
+                                type = new types_1.BoundedArrayType(type, ast_expressions_1.parseNumericLiteralValueFromAST(postfix.size));
                             }
                             else {
                                 // If a size is specified, that is not a literal, it must be an expression (via the grammar).
@@ -46103,7 +46160,7 @@ class FunctionDefinition extends constructs_1.BasicCPPConstruct {
         }
         // Consider "out-of-line" definitions as if they were in the class scope.
         // Need to change the parent to the context in which the definition occurs, though.
-        if (constructs_1.isMemberSpecificationContext(declaration.context)) {
+        if (constructs_1.isMemberSpecificationContext(declaration.context) && !constructs_1.isMemberSpecificationContext(context)) {
             context = constructs_1.createOutOfLineFunctionDefinitionContext(declaration.context, context);
         }
         // Create implementation and body block (before params and body statements added yet)
@@ -46320,11 +46377,6 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         this.context.program.registerClassDefinition(this.declaration.declaredEntity.qualifiedName, this);
     }
     //     public readonly members: MemberVariableDeclaration | MemberFunctionDeclaration | MemberFunctionDefinition;
-    // export interface SimpleDeclarationASTNode extends ASTNode {
-    //     readonly construct_type: "simple_declaration";
-    //     readonly specs: DeclarationSpecifiersASTNode;
-    //     readonly declarators: readonly DeclaratorInitASTNode[];
-    // }
     static createFromAST(ast, tuContext) {
         var _a;
         let classKey = ast.head.classKey;
@@ -47121,7 +47173,7 @@ exports.FunctionDefinitionGroup = FunctionDefinitionGroup;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.selectOverloadedDefinition = exports.ClassEntity = exports.FunctionEntity = exports.TemporaryObjectEntity = exports.MemberReferenceEntity = exports.MemberObjectEntity = exports.MemberAccessEntity = exports.BaseSubobjectEntity = exports.ArraySubobjectEntity = exports.NewObjectEntity = exports.ReceiverEntity = exports.PassByReferenceParameterEntity = exports.PassByValueParameterEntity = exports.ReturnByReferenceEntity = exports.ReturnObjectEntity = exports.GlobalObjectEntity = exports.LocalReferenceEntity = exports.LocalObjectEntity = exports.runtimeObjectLookup = exports.FunctionOverloadGroup = exports.NamedEntity = exports.CPPEntity = exports.ClassScope = exports.NamespaceScope = exports.NamedScope = exports.BlockScope = exports.Scope = void 0;
+exports.selectOverloadedDefinition = exports.ClassEntity = exports.FunctionEntity = exports.TemporaryObjectEntity = exports.MemberReferenceEntity = exports.MemberObjectEntity = exports.MemberAccessEntity = exports.BaseSubobjectEntity = exports.DynamicLengthArrayNextElementEntity = exports.ArraySubobjectEntity = exports.NewArrayEntity = exports.NewObjectEntity = exports.ReceiverEntity = exports.PassByReferenceParameterEntity = exports.PassByValueParameterEntity = exports.ReturnByReferenceEntity = exports.ReturnObjectEntity = exports.GlobalObjectEntity = exports.LocalReferenceEntity = exports.LocalObjectEntity = exports.runtimeObjectLookup = exports.FunctionOverloadGroup = exports.NamedEntity = exports.CPPEntity = exports.ClassScope = exports.NamespaceScope = exports.NamedScope = exports.BlockScope = exports.Scope = void 0;
 const types_1 = __webpack_require__(8716);
 const util_1 = __webpack_require__(6560);
 const observe_1 = __webpack_require__(5114);
@@ -47871,9 +47923,6 @@ class NewObjectEntity extends CPPEntity {
         super(...arguments);
         this.variableKind = "object";
     }
-    toString() {
-        return "object (" + this.type + ")";
-    }
     runtimeLookup(rtConstruct) {
         // no additional runtimeLookup() needed on the object since it will never be a reference
         while (rtConstruct.model.construct_type !== "new_expression" && rtConstruct.parent) {
@@ -47881,6 +47930,7 @@ class NewObjectEntity extends CPPEntity {
         }
         util_1.assert(rtConstruct.model.construct_type === "new_expression");
         let newRtConstruct = rtConstruct;
+        util_1.assert(newRtConstruct.allocatedObject);
         return newRtConstruct.allocatedObject;
     }
     isTyped(predicate) {
@@ -47891,6 +47941,28 @@ class NewObjectEntity extends CPPEntity {
     }
 }
 exports.NewObjectEntity = NewObjectEntity;
+;
+class NewArrayEntity extends CPPEntity {
+    constructor() {
+        super(...arguments);
+        this.variableKind = "object";
+    }
+    runtimeLookup(rtConstruct) {
+        while (rtConstruct.model.construct_type !== "new_array_expression" && rtConstruct.parent) {
+            rtConstruct = rtConstruct.parent;
+        }
+        util_1.assert(rtConstruct.model.construct_type === "new_array_expression");
+        let newRtConstruct = rtConstruct;
+        return newRtConstruct.allocatedObject;
+    }
+    isTyped(predicate) {
+        return predicate(this.type);
+    }
+    describe() {
+        return { name: "a new dynamically sized array", message: "the dynamically allocated/sized array (of element type " + this.type + ") created by new" };
+    }
+}
+exports.NewArrayEntity = NewArrayEntity;
 ;
 class ArraySubobjectEntity extends CPPEntity {
     constructor(arrayEntity, index) {
@@ -47914,6 +47986,32 @@ class ArraySubobjectEntity extends CPPEntity {
     }
 }
 exports.ArraySubobjectEntity = ArraySubobjectEntity;
+class DynamicLengthArrayNextElementEntity extends CPPEntity {
+    constructor(arrayEntity) {
+        super(arrayEntity.type.elemType);
+        this.variableKind = "object";
+        this.arrayEntity = arrayEntity;
+    }
+    runtimeLookup(rtConstruct) {
+        while (rtConstruct.model.construct_type !== "new_array_expression" && rtConstruct.parent) {
+            rtConstruct = rtConstruct.parent;
+        }
+        util_1.assert(rtConstruct.model.construct_type === "new_array_expression");
+        let newRtConstruct = rtConstruct;
+        return newRtConstruct.nextElemToInit;
+    }
+    isTyped(predicate) {
+        return predicate(this.type);
+    }
+    describe() {
+        let arrDesc = this.arrayEntity.describe();
+        return {
+            name: arrDesc.name + "[?]",
+            message: "the next element of " + arrDesc.message + " to be initialized"
+        };
+    }
+}
+exports.DynamicLengthArrayNextElementEntity = DynamicLengthArrayNextElementEntity;
 class BaseSubobjectEntity extends CPPEntity {
     constructor(containingEntity, type) {
         var _a;
@@ -48915,6 +49013,9 @@ exports.CPPError = {
             }
         },
         storage: {
+            extern_prohibited: function (construct) {
+                return new CompilerNote(construct, NoteKind.ERROR, "declaration.storage.extern_prohibited", "The extern specifier is not allowed on this kind of declaration.");
+            },
             once: function (construct, spec) {
                 return new CompilerNote(construct, NoteKind.ERROR, "declaration.storage.once", "Storage specifier (" + spec + ") may only be used once.");
             },
@@ -49084,8 +49185,19 @@ exports.CPPError = {
         },
         new: {
             unsupported_type: function (construct, type) {
-                return new CompilerNote(construct, NoteKind.ERROR, "expr.input.unsupported_type", `The new operator cannot be used to create an object of type: ${type}`);
+                return new CompilerNote(construct, NoteKind.ERROR, "expr.new.unsupported_type", `The new operator cannot be used to create an object of type: ${type}`);
             }
+        },
+        new_array: {
+            length_required: function (construct) {
+                return new CompilerNote(construct, NoteKind.ERROR, "expr.new.length_required", `A length must be specified when creating a dynamically allocated array.`);
+            },
+            integer_length_required: function (construct) {
+                return new CompilerNote(construct, NoteKind.ERROR, "expr.new.integer_length_required", `The expression specifying the length of a dynamically allocated array must yield an integer.`);
+            },
+            direct_initialization_prohibited: function (construct) {
+                return new CompilerNote(construct, NoteKind.ERROR, "expr.new.direct_initialization_prohibited", `A dynamically allocated array may not be initialized with (). (Try {} if you want to initialize individual elements.)`);
+            },
         },
         delete: {
             no_destructor: function (construct, type) {
@@ -49096,6 +49208,9 @@ exports.CPPError = {
             },
             pointerToObjectType: function (construct, type) {
                 return new CompilerNote(construct, NoteKind.ERROR, "expr.delete.pointerToObjectType", "The delete operator cannot be used with a pointer to a non-object type (e.g. void pointers, function pointers). (Current operand is " + type + " ).");
+            },
+            pointerToArrayElemType: function (construct, type) {
+                return new CompilerNote(construct, NoteKind.ERROR, "expr.delete.pointerToObjectType", "The delete [] operator cannot be used with a pointer to a type that cannot be stored in an array (e.g. void pointers, function pointers). (Current operand is " + type + " ).");
             }
         },
         dereference: {
@@ -49529,8 +49644,8 @@ exports.RuntimeExpression = RuntimeExpression;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.RuntimeFunctionArrowExpression = exports.RuntimeObjectArrowExpression = exports.ArrowExpression = exports.RuntimeFunctionDotExpression = exports.RuntimeObjectDotExpression = exports.DotExpression = exports.RuntimeSubscriptExpression = exports.SubscriptExpression = exports.RuntimeLogicalNotExpression = exports.LogicalNotExpression = exports.RuntimeUnaryMinusExpression = exports.UnaryMinusExpression = exports.RuntimeUnaryPlusExpression = exports.UnaryPlusExpression = exports.RuntimeAddressOfExpression = exports.AddressOfExpression = exports.RuntimeDereferenceExpression = exports.DereferenceExpression = exports.RuntimePrefixIncrementExpression = exports.PrefixIncrementExpression = exports.RuntimeLogicalBinaryOperatorExpression = exports.LogicalBinaryOperatorExpression = exports.RuntimePointerComparisonExpression = exports.PointerComparisonExpression = exports.RuntimeRelationalBinaryOperator = exports.RelationalBinaryOperatorExpression = exports.RuntimeInputOperatorExpression = exports.InputOperatorExpression = exports.RuntimeOutputOperatorExpression = exports.OutputOperatorExpression = exports.RuntimePointerOffset = exports.PointerOffsetExpression = exports.RuntimePointerDifference = exports.PointerDifferenceExpression = exports.RuntimeArithmeticBinaryOperator = exports.ArithmeticBinaryOperatorExpression = exports.RuntimeCompoundAssignment = exports.CompoundAssignmentExpression = exports.RuntimeAssignment = exports.AssignmentExpression = exports.RuntimeTernary = exports.TernaryExpression = exports.RuntimeComma = exports.CommaExpression = exports.SimpleRuntimeExpression = exports.InvalidExpression = exports.UnsupportedExpression = exports.createRuntimeExpression = exports.createExpressionFromAST = exports.readValueWithAlert = void 0;
-exports.isConvertible = exports.isConvertibleToPointer = exports.isIntegerLiteralZero = exports.integralPromotion = exports.standardConversion = exports.qualificationConversion = exports.typeConversion = exports.convertToPRValue = exports.QualificationConversion = exports.FloatingToIntegralConversion = exports.IntegralToFloatingConversion = exports.FloatingPointConversion = exports.FloatingPointPromotion = exports.IntegralConversion = exports.IntegralPromotion = exports.IntegralToBooleanConversion = exports.FloatingToBooleanConversion = exports.PointerToBooleanConversion = exports.PointerConversion = exports.NullPointerConversion = exports.StreamToBoolConversion = exports.ArrayToPointerConversion = exports.LValueToRValueConversion = exports.RuntimeImplicitConversion = exports.ImplicitConversion = exports.RuntimeMagicFunctionCallExpression = exports.MagicFunctionCallExpression = exports.overloadResolution = exports.AuxiliaryExpression = exports.RuntimeInitializerListExpression = exports.InitializerListExpression = exports.RuntimeParentheses = exports.ParenthesesExpression = exports.RuntimeStringLiteralExpression = exports.StringLiteralExpression = exports.RuntimeNumericLiteral = exports.NumericLiteralExpression = exports.parseNumericLiteralValueFromAST = exports.RuntimeThisExpression = exports.ThisExpression = exports.RuntimeFunctionIdentifierExpression = exports.RuntimeObjectIdentifierExpression = exports.entityLookup = exports.IdentifierExpression = exports.RuntimeDeleteExpression = exports.DeleteExpression = exports.RuntimeNewExpression = exports.NewExpression = exports.RuntimePostfixIncrementExpression = exports.PostfixIncrementExpression = void 0;
-exports.InvalidOperatorOverloadExpression = exports.RuntimeMemberOperatorOverloadExpression = exports.MemberOperatorOverloadExpression = exports.RuntimeNonMemberOperatorOverloadExpression = exports.NonMemberOperatorOverloadExpression = exports.selectOperatorOverload = exports.usualArithmeticConversions = void 0;
+exports.MemberOperatorOverloadExpression = exports.RuntimeNonMemberOperatorOverloadExpression = exports.NonMemberOperatorOverloadExpression = exports.selectOperatorOverload = exports.usualArithmeticConversions = exports.isConvertible = exports.isConvertibleToPointer = exports.isIntegerLiteralZero = exports.integralPromotion = exports.standardConversion = exports.qualificationConversion = exports.typeConversion = exports.convertToPRValue = exports.QualificationConversion = exports.FloatingToIntegralConversion = exports.IntegralToFloatingConversion = exports.FloatingPointConversion = exports.FloatingPointPromotion = exports.IntegralConversion = exports.IntegralPromotion = exports.IntegralToBooleanConversion = exports.FloatingToBooleanConversion = exports.PointerToBooleanConversion = exports.PointerConversion = exports.NullPointerConversion = exports.StreamToBoolConversion = exports.ArrayToPointerConversion = exports.LValueToRValueConversion = exports.RuntimeImplicitConversion = exports.ImplicitConversion = exports.RuntimeMagicFunctionCallExpression = exports.MagicFunctionCallExpression = exports.overloadResolution = exports.AuxiliaryExpression = exports.RuntimeInitializerListExpression = exports.InitializerListExpression = exports.RuntimeParentheses = exports.ParenthesesExpression = exports.RuntimeStringLiteralExpression = exports.StringLiteralExpression = exports.RuntimeNumericLiteral = exports.NumericLiteralExpression = exports.RuntimeThisExpression = exports.ThisExpression = exports.RuntimeFunctionIdentifierExpression = exports.RuntimeObjectIdentifierExpression = exports.entityLookup = exports.IdentifierExpression = exports.RuntimePostfixIncrementExpression = exports.PostfixIncrementExpression = void 0;
+exports.InvalidOperatorOverloadExpression = exports.RuntimeMemberOperatorOverloadExpression = void 0;
 const objects_1 = __webpack_require__(697);
 const Simulation_1 = __webpack_require__(2295);
 const types_1 = __webpack_require__(8716);
@@ -49545,9 +49660,9 @@ const expressionBase_1 = __webpack_require__(9180);
 const codeOutlets_1 = __webpack_require__(3004);
 const predicates_1 = __webpack_require__(941);
 const opaqueExpression_1 = __webpack_require__(7104);
-const PotentialFullExpression_1 = __webpack_require__(2593);
-const initializers_1 = __webpack_require__(1288);
-const declarations_1 = __webpack_require__(8963);
+const FunctionCall_1 = __webpack_require__(20);
+const new_delete_1 = __webpack_require__(2328);
+const ast_expressions_1 = __webpack_require__(3044);
 function readValueWithAlert(obj, sim) {
     let value = obj.readValue();
     if (!value.isValid) {
@@ -49583,9 +49698,9 @@ const ExpressionConstructsMap = {
     "bitwise_not_expression": (ast, context) => new UnsupportedExpression(context, ast, "bitwise not"),
     "sizeof_expression": (ast, context) => new UnsupportedExpression(context, ast, "sizeof"),
     "sizeof_type_expression": (ast, context) => new UnsupportedExpression(context, ast, "sizeof (type)"),
-    "new_expression": (ast, context) => NewExpression.createFromAST(ast, context),
-    "delete_expression": (ast, context) => DeleteExpression.createFromAST(ast, context),
-    "delete_array_expression": (ast, context) => new UnsupportedExpression(context, ast, "delete[]"),
+    "new_expression": (ast, context) => new_delete_1.createNewExpressionFromAST(ast, context),
+    "delete_expression": (ast, context) => new_delete_1.DeleteExpression.createFromAST(ast, context),
+    "delete_array_expression": (ast, context) => new_delete_1.DeleteArrayExpression.createFromAST(ast, context),
     // postfix operators
     "static_cast_expression": (ast, context) => new UnsupportedExpression(context, ast, "static cast"),
     "dynamic_cast_expression": (ast, context) => new UnsupportedExpression(context, ast, "dynamic cast"),
@@ -49639,8 +49754,10 @@ const ExpressionConstructsRuntimeMap = {
     "prefix_increment_expression": (construct, parent) => new RuntimePrefixIncrementExpression(construct, parent),
     "dereference_expression": (construct, parent) => new RuntimeDereferenceExpression(construct, parent),
     "address_of_expression": (construct, parent) => new RuntimeAddressOfExpression(construct, parent),
-    "new_expression": (construct, parent) => new RuntimeNewExpression(construct, parent),
-    "delete_expression": (construct, parent) => new RuntimeDeleteExpression(construct, parent),
+    "new_expression": (construct, parent) => new new_delete_1.RuntimeNewExpression(construct, parent),
+    "new_array_expression": (construct, parent) => new new_delete_1.RuntimeNewArrayExpression(construct, parent),
+    "delete_expression": (construct, parent) => new new_delete_1.RuntimeDeleteExpression(construct, parent),
+    "delete_array_expression": (construct, parent) => new new_delete_1.RuntimeDeleteArrayExpression(construct, parent),
     "this_expression": (construct, parent) => new RuntimeThisExpression(construct, parent),
     "unary_plus_expression": (construct, parent) => new RuntimeUnaryPlusExpression(construct, parent),
     "unary_minus_expression": (construct, parent) => new RuntimeUnaryMinusExpression(construct, parent),
@@ -50055,6 +50172,86 @@ class RuntimeCompoundAssignment extends SimpleRuntimeExpression {
     }
 }
 exports.RuntimeCompoundAssignment = RuntimeCompoundAssignment;
+// var beneathConversions = function(expr){
+//     while(isA(expr, Conversions.ImplicitConversion)){
+//         expr = expr.from;
+//     }
+//     return expr;
+// };
+// TODO: there might be a better way to implement this. currently it reuses code from BinaryOperator, but I feel
+// a little bit icky about how it does it and the way it treats the construct tree
+// export var CompoundAssignment  = Expression.extend({
+//     _name: "CompoundAssignment",
+//     valueCategory : "lvalue",
+//     i_createFromAST: function(ast){
+//         CompoundAssignment._parent.i_createFromAST.apply(this, arguments);
+//         // Basically this uses a binary operator expression to do most of the work
+//         // e.g. x += y should be equivalent (to a certain extent) to x = x + y
+//         this.operator = ast.operator;
+//         var binaryOp = this.operator.substring(0, this.operator.length-1); // remove the = from the operator e.g. += becomes +
+//         var binAst = copyMixin(ast, {
+//             left: ast.lhs,
+//             right: ast.rhs,
+//             operator: binaryOp
+//         });
+//         var binaryOpClass = BINARY_OPS[binaryOp];
+//         this.i_binaryOp = binaryOpClass.instance(binAst, {parent: this});
+//     },
+//     compile : function() {
+//         //compiles left and right
+//         this.i_binaryOp.compile();
+//         if(this.hasErrors()){
+//             return;
+//         }
+//         // left should be a standard conversion sequence
+//         // we want to extract the pre-conversion expression for lhs
+//         this.lhs = beneathConversions(this.i_binaryOp.left);
+//         // Attempt to convert rhs (a binary operation) back to type of lhs
+//         this.rhs = standardConversion(this.i_binaryOp, this.lhs.type);
+//         // Type Check
+//         if (this.lhs.valueCategory !== "lvalue") {
+//             this.addNote(CPPError.expr.assignment.lhs_lvalue(this));
+//         }
+//         if (!sameType(this.rhs.type, this.lhs.type)) {
+//             this.addNote(CPPError.expr.assignment.convert(this, this.lhs, this.rhs));
+//         }
+//         this.type = this.lhs.type;
+//         this.compileTemporarires();
+//     },
+//     upNext : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         // Evaluate subexpressions
+//         if (inst.index == "subexpressions") {
+//             inst.rhs = this.rhs.createAndPushInstance(sim, inst);
+//             inst.index = "operate";
+//             return true;
+//         }
+//     },
+//     stepForward : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         if (inst.index === "operate"){
+//             // extract lvalue on lhs that may be underneath a standard conversion sequence
+//             // note: this is only applicable in compound assignment. in regular lhs will never be converted
+//             var findLhs = inst.rhs;
+//             while(isA(findLhs.model, ImplicitConversion)){
+//                 findLhs = findLhs.childInstances.from; // strip conversions off result of binary op
+//             }
+//             findLhs = findLhs.childInstances.left; // go to left argument of binary op
+//             while(isA(findLhs.model, ImplicitConversion)){
+//                 findLhs = findLhs.childInstances.from; // strip conversions off left operand
+//             }
+//             var lhs = findLhs.evalResult;
+//             var rhs = inst.rhs.evalResult;
+//             lhs.writeValue(rhs);
+//             inst.setEvalResult(lhs);
+//             this.done(sim, inst);
+//         }
+//     },
+//     isTailChild : function(child){
+//         return {isTail: false,
+//             reason: "The compound assignment itself will happen after the recursive call returns.",
+//             others: [this]
+//         };
+//     }
+// });
 class BinaryOperatorExpression extends expressionBase_1.Expression {
     constructor(context, ast, operator) {
         super(context, ast);
@@ -51589,6 +51786,62 @@ class RuntimeFunctionArrowExpression extends expressionBase_1.RuntimeExpression 
     }
 }
 exports.RuntimeFunctionArrowExpression = RuntimeFunctionArrowExpression;
+// export var Arrow  = Expression.extend({
+//     _name: "Arrow",
+//     i_runtimeConstructClass : RuntimeMemberAccess,
+//     valueCategory: "lvalue",
+//     i_childrenToCreate : ["operand"],
+//     i_childrenToConvert : {
+//         operand : Types.Pointer.instance()
+//     },
+//     i_childrenToExecute : ["operand"],
+//     i_createFromAST : function(ast, context) {
+//         Arrow._parent.i_createFromAST.apply(this, arguments);
+//         this.memberName = ast.member.identifier;
+//     },
+//     compile : function(compilationContext) {
+//         this.i_paramTypes = compilationContext && compilationContext.paramTypes;
+//         Expressions.Dot._parent.compile.apply(this, arguments);
+//     },
+//     typeCheck : function(){
+//         if (!isA(this.operand.type, Types.Pointer) || !isA(this.operand.type.ptrTo, Types.Class)) {
+//             this.addNote(CPPError.expr.arrow.class_pointer_type(this));
+//             return false;
+//         }
+//         // Find out what this identifies
+//         try{
+//             this.entity = this.operand.type.ptrTo.classScope.requiredMemberLookup(this.memberName, {paramTypes: this.i_paramTypes, isThisConst:this.operand.type.ptrTo.isConst});
+//             this.type = this.entity.type;
+//         }
+//         catch(e){
+//             if (isA(e, SemanticExceptions.BadLookup)){
+//                 this.addNote(CPPError.expr.arrow.memberLookup(this, this.operand.type.ptrTo, this.memberName));
+//                 // this.addNote(e.annotation(this));
+//             }
+//             else{
+//                 throw e;
+//             }
+//         }
+//     },
+//     stepForward : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         if (inst.index == "operate"){
+//             var addr = inst.childInstances.operand.evalResult;
+//             if (Types.Pointer.isNull(addr.rawValue())){
+//                 sim.crash("Ow! Your code just tried to use the arrow operator on a null pointer!");
+//             }
+//             inst.setObjectAccessedFrom(sim.memory.dereference(addr, this.operand.type.ptrTo));
+//             inst.setEvalResult(this.entity.runtimeLookup(sim, inst));
+//             this.done(sim, inst);
+//             return true;
+//         }
+//     },
+//     isTailChild : function(child){
+//         return {isTail: false,
+//             reason: "The arrow operation itself will happen after the recursive call returns.",
+//             others: [this]
+//         };
+//     }
+// });
 class PostfixIncrementExpression extends expressionBase_1.Expression {
     constructor(context, ast, operand) {
         super(context, ast);
@@ -51668,290 +51921,194 @@ class RuntimePostfixIncrementExpression extends SimpleRuntimeExpression {
     }
 }
 exports.RuntimePostfixIncrementExpression = RuntimePostfixIncrementExpression;
-class NewExpression extends expressionBase_1.Expression {
-    constructor(context, ast, typeSpecifier, declarator, createdType) {
-        super(context, ast);
-        this.construct_type = "new_expression";
-        this.valueCategory = "prvalue";
-        this.operator = "new";
-        util_1.assert(!createdType || !declarator.type || types_1.sameType(createdType, declarator.type));
-        this.attach(this.typeSpecifier = typeSpecifier);
-        this.attach(this.declarator = declarator);
-        if (!createdType) {
-            // If we don't have a viable type to create
-            return;
-        }
-        if (!types_1.isCompleteObjectType(createdType)) {
-            this.addNote(errors_1.CPPError.expr.new.unsupported_type(this, createdType));
-            return;
-        }
-        this.createdType = createdType;
-        this.type = new types_1.PointerType(createdType);
-        let initAST = ast.initializer;
-        let initializer = !initAST ?
-            initializers_1.DefaultInitializer.create(context, new entities_1.NewObjectEntity(createdType)) :
-            initAST.construct_type === "direct_initializer" ?
-                initializers_1.DirectInitializer.create(context, new entities_1.NewObjectEntity(createdType), initAST.args.map((a) => createExpressionFromAST(a, context)), "direct") :
-                initAST.construct_type === "list_initializer" ?
-                    initializers_1.ListInitializer.create(context, new entities_1.NewObjectEntity(createdType), initAST.arg.elements.map((a) => createExpressionFromAST(a, context))) :
-                    util_1.assertNever(initAST);
-        if (initializer.construct_type !== "invalid_construct") {
-            this.attach(this.initializer = initializer);
-        }
-        else {
-            this.attach(initializer);
-        }
-    }
-    static createFromAST(ast, context) {
-        // Need to create TypeSpecifier first to get the base type for the declarator
-        let typeSpec = declarations_1.TypeSpecifier.createFromAST(ast.specs, context);
-        let baseType = typeSpec.baseType;
-        // Create declarator and determine declared type
-        let declarator = declarations_1.Declarator.createFromAST(ast.declarator, context, baseType);
-        let createdType = declarator.type;
-        if (createdType && types_1.isPotentiallyCompleteArrayType(createdType)) {
-            // TODO new array expression
-            return util_1.assertFalse();
-        }
-        else {
-            return new NewExpression(context, ast, typeSpec, declarator, createdType);
-        }
-    }
-    createDefaultOutlet(element, parent) {
-        return new codeOutlets_1.NewExpressionOutlet(element, this, parent);
-    }
-    describeEvalResult(depth) {
-        throw new Error("Method not implemented.");
-    }
-}
-exports.NewExpression = NewExpression;
-class RuntimeNewExpression extends expressionBase_1.RuntimeExpression {
-    constructor(model, parent) {
-        var _a;
-        super(model, parent);
-        this.index = 0;
-        this.initializer = (_a = this.model.initializer) === null || _a === void 0 ? void 0 : _a.createRuntimeInitializer(this);
-    }
-    upNextImpl() {
-        if (this.index === 1) {
-            this.initializer && this.sim.push(this.initializer);
-            ++this.index;
-        }
-    }
-    stepForwardImpl() {
-        if (this.index === 0) {
-            this.allocatedObject = this.sim.memory.heap.allocateNewObject(this.model.createdType);
-            ++this.index;
-        }
-        else {
-            this.setEvalResult(this.allocatedObject.getPointerTo());
-            this.startCleanup();
-        }
-    }
-}
-exports.RuntimeNewExpression = RuntimeNewExpression;
-// export var NewExpression = Expression.extend({
-//     _name: "NewExpression",
+// export var Delete  = Expression.extend({
+//     _name: "Delete",
 //     valueCategory: "prvalue",
-//     initIndex: "allocate",
+//     type: Types.Void.instance(),
+//     i_childrenToCreate : ["operand"],
+//     i_childrenToConvert : {
+//         "operand" : Types.Pointer.instance()
+//     },
+//     i_childrenToExecute : ["operand"],
+//     typeCheck : function(){
+//         if (isA(this.operand.type.ptrTo, Types.Class)){
+//             var classType = this.operand.type.ptrTo;
+//             var dest = classType.destructor;
+//             //TODO not found and ambiguous
+//             if (isA(dest, FunctionEntity)){
+//                 //this.assnOp = assnOp;
+//                 //this.type = noRef(assnOp.type.returnType);
+//                 // Attempt standard conversion of rhs to match lhs, without lvalue to rvalue
+//                 //this.rhs = this.sub.rhs = standardConversion(this.rhs, this.lhs.type, {suppressLTR:true});
+//                 this.funcCall = this.funcCall = FunctionCall.instance({args: []}, {parent:this});
+//                 this.funcCall.compile({func: dest});
+//                 this.type = this.funcCall.type;
+//             }
+//             else{
+//                 this.addNote(CPPError.expr.delete.no_destructor(this, classType));
+//             }
+//         }
+//         // Type check
+//         if (!isA(this.operand.type, Types.Pointer)) {
+//             this.addNote(CPPError.expr.delete.pointer(this, this.operand.type));
+//         }
+//         else if (!this.operand.type.ptrTo.isObjectType){
+//             this.addNote(CPPError.expr.delete.pointerToObjectType(this, this.operand.type));
+//         }
+//     },
+//     stepForward : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         if (!inst.alreadyDestructed){
+//             var ptr = inst.childInstances.operand.evalResult;
+//             if (Types.Pointer.isNull(ptr.rawValue())){
+//                 this.done(sim, inst);
+//                 return;
+//             }
+//             
+//         }
+//         else{
+//             var deleted = sim.memory.heap.deleteObject(inst.childInstances.operand.evalResult.value, inst);
+//             this.done(sim, inst);
+//         }
+//     },
+//     isTailChild : function(child){
+//         return {isTail: false,
+//             reason: "The delete operation will happen after the recursive call returns.",
+//             others: [this]
+//         };
+//     }
+// });
+// //TODO: move to runtimeEnvironment or memory js modules?
+// /**
+//  *
+//  * @param sim
+//  * @param inst
+//  * @param {Value | CPPObject} ptr
+//  * @returns {CPPObject?}
+//  */
+// var deleteHeapArray = function(sim: Simulation, rtConstruct: RuntimeConstruct, ptr) {
+//     if(Types.Pointer.isNull(ptr.rawValue())){
+//         return;
+//     }
+//     // If it's an array pointer, just grab array object to delete from RTTI.
+//     // Otherwise ask memory what object it's pointing to.
+//     var obj;
+//     if (isA(ptr.type, Types.ArrayPointer)){
+//         obj = ptr.type.arrObj;
+//         // if the address is not the same, it means we're deleting through an array pointer,
+//         // but not one that is pointing to the beginning of the array. this causes undefined behavior
+//         if (ptr.rawValue() !== obj.address) {
+//             sim.undefinedBehavior("It looks like you used <span class='code'>delete[]</span> on a pointer to an array, but it wasn't pointing at the beginning of the array as is required for <span class='code'>delete[]</span>. This causes undefined behavior!");
+//         }
+//     }
+//     else{
+//         obj = sim.memory.dereference(ptr);
+//     }
+//     // Check to make sure we're deleting a valid heap object.
+//     if (!isA(obj, DynamicObject)) {
+//         if (isA(obj, AutoObject)) {
+//             sim.undefinedBehavior("Oh no! The pointer you gave to <span class='code'>delete[]</span> was pointing to something on the stack!");
+//         }
+//         else {
+//             sim.undefinedBehavior("Oh no! The pointer you gave to <span class='code'>delete[]</span> wasn't pointing to a valid heap object.");
+//         }
+//         return;
+//     }
+//     if (!isA(obj.type, Types.Array)) {
+//         sim.undefinedBehavior("You tried to delete a non-array object with a <span class='code'>delete[]</span> expression. Oops!");
+//         return;
+//     }
+//     //if (!similarType(obj.type.elemType, this.operand.type.ptrTo)) {
+//     //    sim.alert("The type of the pointer you gave to <span class='code'>delete</span> is different than the element type of the array object I found on the heap - that's a bad thing!");
+//     //    this.done(sim, inst);
+//     //    return;
+//     //}
+//     if (!obj.isAlive()) {
+//         DeadObjectMessage.instance(obj, {fromDelete:true}).display(sim, inst);
+//         return;
+//     }
+//     return sim.memory.heap.deleteObject(ptr.rawValue(), inst);
+// };
+// // TODO: liskov suggests this shouldn't be a subtype. Use has-a instead?
+// export var DeleteArray = Delete.extend({
+//     _name: "DeleteArray",
+//     stepForward: function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         var ptr = inst.childInstances.operand.evalResult;
+//         deleteHeapArray(sim, inst, ptr);
+//         this.done(sim, inst);
+//     },
+//     isTailChild : function(child){
+//         return {isTail: false,
+//             reason: "The delete[] operation will happen after the recursive call returns.",
+//             others: [this]
+//         };
+//     }
+// });
+// // TODO: This appears to work but I'm pretty sure I copy/pasted from NewExpression and never finished changing it.
+// export var ConstructExpression = Expression.extend({
+//     _name: "ConstructExpression",
+//     valueCategory: "prvalue",
+//     initIndex: "init",
 //     compile : function(){
 //         // Compile the type specifier
-//         this.typeSpec = TypeSpecifier.instance(this.ast.specs, {parent:this});
+//         this.typeSpec = TypeSpecifier.instance([this.ast.type], {parent:this});
 //         this.typeSpec.compile();
-//         this.heapType = this.typeSpec.type;
+//         this.type = this.typeSpec.type;
 //         // Compile declarator if it exists
 //         if(this.ast.declarator) {
 //             this.declarator = Declarator.instance(this.ast.declarator, {parent: this});
 //             this.declarator.compile({baseType: this.heapType});
 //             this.heapType = this.declarator.type;
 //         }
-//         if (isA(this.heapType, Types.Array)){
-//             // Note: this is Pointer, rather than ArrayPointer, since the latter should only be used in runtime contexts
-//             this.type = Types.Pointer.instance(this.heapType.elemType);
-//             if (this.declarator.dynamicLengthExpression){
-//                 this.dynamicLength = this.i_createAndCompileChildExpr(this.declarator.dynamicLengthExpression, Types.Int.instance());
-//                 this.initIndex = "length";
-//             }
-//         }
-//         else {
-//             this.type = Types.Pointer.instance(this.heapType);
-//         }
-//         var entity = NewObjectEntity.instance(this.heapType);
-//         var initCode = this.ast.initializer || {args: []};
-//         if (isA(this.heapType, Types.Class) || initCode.args.length == 1){
-//             this.initializer = NewDirectInitializer.instance(initCode, {parent: this});
-//             this.initializer.compile(entity);
-//         }
-//         else if (initCode.args.length == 0){
-//             this.initializer = NewDefaultInitializer.instance(initCode, {parent: this});
-//             this.initializer.compile(entity);
+//         this.entity = this.createTemporaryObject(this.type, "[temp " + this.type + "]");
+//         if (isA(this.type, Types.Class) || this.ast.args.length == 1){
+//             this.initializer = DirectInitializer.instance(this.ast, {parent: this});
+//             this.initializer.compile(this.entity);
 //         }
 //         else{
-//             this.addNote(CPPError.declaration.init.scalar_args(this, this.heapType));
+//             this.addNote(CPPError.declaration.init.scalar_args(this, this.type));
 //         }
 //         this.compileTemporarires();
 //     },
 //     createInstance : function(sim, parent){
 //         var inst = Expression.createInstance.apply(this, arguments);
-//         inst.initializer = this.initializer.createInstance(sim, inst);
+//         inst.tempObject = this.entity.objectInstance(inst);
 //         return inst;
 //     },
 //     upNext : function(sim: Simulation, rtConstruct: RuntimeConstruct){
-//         if (inst.index === "length"){
-//             inst.dynamicLength = this.dynamicLength.createAndPushInstance(sim, inst);
-//             inst.index = "allocate";
+//         if (inst.index === "init"){
+//             var initInst = this.initializer.createAndPushInstance(sim, inst);
+//             inst.index = "done";
 //             return true;
-//         }
-//         else if (inst.index === "init"){
-//             sim.push(inst.initializer);
-//             inst.index = "operate";
-//             return true;
-//         }
-//     },
-//     stepForward : function(sim: Simulation, rtConstruct: RuntimeConstruct){
-//         // Dynamic memory - doesn't get added to any scope, but we create on the heap
-//         if (inst.index === "allocate") {
-//             var heapType = this.heapType;
-//             // If it's an array, we need to use the dynamic length
-//             if (this.dynamicLength) {
-//                 var len = inst.dynamicLength.evalResult.rawValue();
-//                 if (len === 0){
-//                     sim.alert("Sorry, but I can't allocate a dynamic array of zero length. I know there's technically an old C-style hack that uses zero-length arrays, but hey, I'm just a lobster. I'll go ahead and allocate an array of length 1 instead.");
-//                     len = 1;
-//                 }
-//                 else if (len < 0){
-//                     sim.undefinedBehavior("I can't allocate an array of negative length. That doesn't even make sense. I'll just allocate an array of length 1 instead.");
-//                     len = 1;
-//                 }
-//                 heapType = Types.Array.instance(this.heapType.elemType, len);
-//             }
-//             var obj = DynamicObject.instance(heapType);
-//             sim.memory.heap.allocateNewObject(obj);
-//             sim.i_pendingNews.push(obj);
-//             inst.i_allocatedObject = obj;
-//             inst.initializer.setAllocatedObject(obj);
-//             inst.index = "init"; // Always use an initializer. If there isn't one, then it will just be default
-//             //if (this.initializer){
-//             //    inst.index = "init";
-//             //}
-//             //else{
-//             //    inst.index = "operate";
-//             //}
-//             //return true;
-//         }
-//         else if (inst.index === "operate") {
-//             if (isA(this.heapType, Types.Array)){
-//                 // RTTI for array pointer
-//                 inst.setEvalResult(Value.instance(inst.i_allocatedObject.address, Types.ArrayPointer.instance(inst.i_allocatedObject)));
-//             }
-//             else{
-//                 // RTTI for object pointer
-//                 inst.setEvalResult(Value.instance(inst.i_allocatedObject.address, Types.ObjectPointer.instance(inst.i_allocatedObject)));
-//             }
-//             sim.i_pendingNews.pop();
-//             this.done(sim, inst);
-//         }
-//     },
-//     explain : function(sim: Simulation, rtConstruct: RuntimeConstruct){
-//         if (this.initializer){
-//             return {message: "A new object of type " + this.heapType.describe().name + " will be created on the heap. " + this.initializer.explain(sim, inst.initializer).message};
 //         }
 //         else{
-//             return {message: "A new object of type " + this.heapType.describe().name + " will be created on the heap."};
+//             if (isA(this.type, Types.class)){
+//                 inst.setEvalResult(inst.tempObject);
+//             }
+//             else{
+//                 inst.setEvalResult(inst.tempObject.readValue());
+//             }
+//             this.done(sim, inst);
 //         }
 //     }
 // });
-class DeleteExpression extends expressionBase_1.Expression {
-    constructor(context, ast, operand) {
-        var _a;
-        super(context, ast);
-        this.construct_type = "delete_expression";
-        this.type = types_1.VoidType.VOID;
-        this.valueCategory = "prvalue";
-        this.operator = "delete";
-        if (!operand.isWellTyped()) {
-            this.attach(this.operand = operand);
-            return;
-        }
-        if (!operand.type.isPointerType()) {
-            this.addNote(errors_1.CPPError.expr.delete.pointer(this, operand.type));
-            this.attach(this.operand = operand);
-            return;
-        }
-        if (!operand.type.isPointerToCompleteObjectType()) {
-            this.addNote(errors_1.CPPError.expr.delete.pointerToObjectType(this, operand.type));
-            this.attach(this.operand = operand);
-            return;
-        }
-        operand = convertToPRValue(operand);
-        this.operand = operand;
-        // This should still be true, assertion for type system
-        util_1.assert((_a = operand.type) === null || _a === void 0 ? void 0 : _a.isPointerToCompleteObjectType());
-        let destroyedType = operand.type.ptrTo;
-        if (destroyedType.isCompleteClassType()) {
-            let dtor = destroyedType.classDefinition.destructor;
-            if (dtor) {
-                let dtorCall = new PotentialFullExpression_1.FunctionCall(context, dtor, [], destroyedType);
-                this.attach(this.dtor = dtorCall);
-            }
-            else {
-                this.addNote(errors_1.CPPError.expr.delete.no_destructor(this, destroyedType));
-            }
-        }
-    }
-    static createFromAST(ast, context) {
-        return new DeleteExpression(context, ast, createExpressionFromAST(ast.operand, context));
-    }
-    createDefaultOutlet(element, parent) {
-        return new codeOutlets_1.DeleteExpressionOutlet(element, this, parent);
-    }
-    describeEvalResult(depth) {
-        throw new Error("Method not implemented.");
-    }
-}
-exports.DeleteExpression = DeleteExpression;
-class RuntimeDeleteExpression extends expressionBase_1.RuntimeExpression {
-    constructor(model, parent) {
-        super(model, parent);
-        this.operand = createRuntimeExpression(this.model.operand, this);
-    }
-    upNextImpl() {
-        if (!this.operand.isDone) {
-            this.sim.push(this.operand);
-        }
-        else if (types_1.PointerType.isNull(this.operand.evalResult.rawValue)) {
-            // delete on a null pointer does nothing
-            this.startCleanup();
-        }
-        else if (this.model.dtor && !this.dtor) {
-            let obj = this.sim.memory.dereference(this.operand.evalResult);
-            if (obj.isAlive && obj instanceof objects_1.DynamicObject && obj.isTyped(types_1.isCompleteClassType)) {
-                this.sim.push(this.dtor = this.model.dtor.createRuntimeFunctionCall(this, obj));
-            }
-        }
-    }
-    stepForwardImpl() {
-        let obj = this.sim.memory.dereference(this.operand.evalResult);
-        if (!obj.hasStorage("dynamic")) {
-            this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Invalid delete");
-        }
-        else if (!obj.isAlive) {
-            this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Double free");
-            this.startCleanup();
-            return;
-        }
-        else if (obj.isTyped(types_1.isBoundedArrayType)) {
-            this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Invalid use of regular delete on array");
-            this.startCleanup();
-            return;
-        }
-        else {
-            this.sim.memory.heap.deleteObject(obj);
-        }
-        this.startCleanup();
-    }
-}
-exports.RuntimeDeleteExpression = RuntimeDeleteExpression;
+// function identifierToText(unqualifiedId: string) : string;
+// function identifierToText(qualId: readonly {identifier: string}[]) : string;
+//     function identifierToText(qualId: string | readonly {identifier: string}[]) : string {
+//     if (typeof qualId === "string") {
+//         return qualId; // If it's an unqualified id
+//     }
+//     else {
+//         return qualId.reduce(function(str,id,i){
+//             return str + (i > 0 ? "::" : "") + id.identifier;
+//         },"");
+//     }
+// };
+// function qualifiedNameString(names) {
+//     if (!Array.isArray(names)){
+//         return names;
+//     }
+//     return names.map(function(id){return id.identifier}).join("::")
+// }
 // TODO: maybe Identifier should be a non-executable construct and then have a 
 // TODO: make separate classes for qualified and unqualified IDs?
 class IdentifierExpression extends expressionBase_1.Expression {
@@ -52120,17 +52277,6 @@ exports.RuntimeThisExpression = RuntimeThisExpression;
 //         this.done(sim, inst);
 //     }
 // });
-function parseCPPChar(litValue) {
-    return util_1.escapeString(litValue).charCodeAt(0);
-}
-;
-const literalJSParse = {
-    "int": parseInt,
-    "float": parseFloat,
-    "double": parseFloat,
-    "bool": (b) => (b ? 1 : 0),
-    "char": parseCPPChar
-};
 const literalTypes = {
     "int": types_1.Int.INT,
     "float": types_1.Double.DOUBLE,
@@ -52138,10 +52284,6 @@ const literalTypes = {
     "bool": types_1.Bool.BOOL,
     "char": types_1.Char.CHAR
 };
-function parseNumericLiteralValueFromAST(ast) {
-    return literalJSParse[ast.type](ast.value);
-}
-exports.parseNumericLiteralValueFromAST = parseNumericLiteralValueFromAST;
 class NumericLiteralExpression extends expressionBase_1.Expression {
     // create from ast code:
     // TODO: are there some literal types without conversion functions? There shouldn't be...
@@ -52155,7 +52297,7 @@ class NumericLiteralExpression extends expressionBase_1.Expression {
         this.value = new runtimeEnvironment_1.Value(value, this.type);
     }
     static createFromAST(ast, context) {
-        return new NumericLiteralExpression(context, ast, literalTypes[ast.type], parseNumericLiteralValueFromAST(ast));
+        return new NumericLiteralExpression(context, ast, literalTypes[ast.type], ast_expressions_1.parseNumericLiteralValueFromAST(ast));
     }
     // public createRuntimeExpression<T extends ArithmeticType>(this: CompiledNumericLiteralExpression<T>, parent: RuntimeConstruct) : RuntimeNumericLiteral<T>;
     // public createRuntimeExpression<T extends AtomicType, V extends ValueCategory>(this: Compiled<Expression<T,V>>, parent: RuntimeConstruct) : never;
@@ -52597,7 +52739,7 @@ class ArrayToPointerConversion extends ImplicitConversion {
         super(from, from.type.adjustToPointerType(), "prvalue");
     }
     operate(fromEvalResult) {
-        return new runtimeEnvironment_1.Value(fromEvalResult.address, new types_1.ArrayPointerType(fromEvalResult));
+        return fromEvalResult.decayToPointer();
     }
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.ArrayToPointerOutlet(element, this, parent);
@@ -53054,7 +53196,7 @@ class NonMemberOperatorOverloadExpression extends expressionBase_1.Expression {
         this.type = types_1.peelReference(returnType);
         this.valueCategory = returnType instanceof types_1.ReferenceType ? "lvalue" : "prvalue";
         // If we get to here, we don't attach the args directly since they will be attached under the function call.
-        this.attach(this.call = new PotentialFullExpression_1.FunctionCall(context, selectedFunctionEntity, args, undefined));
+        this.attach(this.call = new FunctionCall_1.FunctionCall(context, selectedFunctionEntity, args, undefined));
     }
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.NonMemberOperatorOverloadExpressionOutlet(element, this, parent);
@@ -53138,7 +53280,7 @@ class MemberOperatorOverloadExpression extends expressionBase_1.Expression {
         this.valueCategory = returnType instanceof types_1.ReferenceType ? "lvalue" : "prvalue";
         // Attach the right as an argument of the function call.
         // Left is the receiver of that call and was already attached as a child.
-        this.attach(this.call = new PotentialFullExpression_1.FunctionCall(context, selectedFunctionEntity, args, receiverExpression.type));
+        this.attach(this.call = new FunctionCall_1.FunctionCall(context, selectedFunctionEntity, args, receiverExpression.type));
     }
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.MemberOperatorOverloadExpressionOutlet(element, this, parent);
@@ -53351,6 +53493,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.RuntimeArrayAggregateInitializer = exports.ArrayAggregateInitializer = exports.RuntimeListInitializer = exports.ListInitializer = exports.RuntimeArrayMemberInitializer = exports.ArrayMemberInitializer = exports.RuntimeCtorInitializer = exports.CtorInitializer = exports.RuntimeClassDirectInitializer = exports.ClassDirectInitializer = exports.RuntimeArrayDirectInitializer = exports.ArrayDirectInitializer = exports.RuntimeAtomicDirectInitializer = exports.AtomicDirectInitializer = exports.RuntimeReferenceDirectInitializer = exports.ReferenceDirectInitializer = exports.RuntimeDirectInitializer = exports.DirectInitializer = exports.RuntimeClassDefaultInitializer = exports.ClassDefaultInitializer = exports.RuntimeArrayDefaultInitializer = exports.ArrayDefaultInitializer = exports.RuntimeAtomicDefaultInitializer = exports.AtomicDefaultInitializer = exports.ReferenceDefaultInitializer = exports.RuntimeDefaultInitializer = exports.DefaultInitializer = exports.RuntimeInitializer = exports.Initializer = void 0;
 const constructs_1 = __webpack_require__(4293);
 const PotentialFullExpression_1 = __webpack_require__(2593);
+const FunctionCall_1 = __webpack_require__(20);
 const expressions_1 = __webpack_require__(6597);
 const entities_1 = __webpack_require__(8397);
 const types_1 = __webpack_require__(8716);
@@ -53464,6 +53607,7 @@ class ArrayDefaultInitializer extends DefaultInitializer {
         let type = this.target.type;
         if (type.elemType instanceof types_1.AtomicType) {
             // Do nothing
+            // TODO: should I create the DefaultInitializers anyway for analysis purposes?
         }
         else {
             this.elementInitializers = [];
@@ -53518,7 +53662,7 @@ class RuntimeArrayDefaultInitializer extends RuntimeDefaultInitializer {
         }
         else {
             let target = this.model.target.runtimeLookup(this);
-            this.observable.send("arrayObjectInitialized", this);
+            this.observable.send("arrayObjectInitialized", target);
             this.startCleanup();
         }
     }
@@ -53540,7 +53684,7 @@ class ClassDefaultInitializer extends DefaultInitializer {
             return;
         }
         this.ctor = overloadResult.selected;
-        this.ctorCall = new PotentialFullExpression_1.FunctionCall(context, this.ctor, [], target.type.cvUnqualified());
+        this.ctorCall = new FunctionCall_1.FunctionCall(context, this.ctor, [], target.type.cvUnqualified());
         this.attach(this.ctorCall);
         // this.args = this.ctorCall.args;
     }
@@ -53931,7 +54075,7 @@ class ClassDirectInitializer extends DirectInitializer {
             return;
         }
         this.ctor = overloadResult.selected;
-        this.ctorCall = new PotentialFullExpression_1.FunctionCall(context, this.ctor, args, target.type.cvUnqualified());
+        this.ctorCall = new FunctionCall_1.FunctionCall(context, this.ctor, args, target.type.cvUnqualified());
         this.attach(this.ctorCall);
         this.args = this.ctorCall.args;
     }
@@ -54413,6 +54557,45 @@ class RuntimeArrayMemberInitializer extends RuntimeInitializer {
     }
 }
 exports.RuntimeArrayMemberInitializer = RuntimeArrayMemberInitializer;
+// export var ParameterInitializer = CopyInitializer.extend({
+//     _name : "ParameterInitializer",
+//     explain : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         var exp = ParameterInitializer._parent.explain.apply(this, arguments);
+//         exp.message = exp.message + "\n\n(Parameter passing is done by copy-initialization.)";
+//         return exp;
+//     }
+// });
+// export var ReturnInitializer = CopyInitializer.extend({
+//     _name : "ReturnInitializer",
+//     stepForward : function(sim: Simulation, rtConstruct: RuntimeConstruct) {
+//         // Need to handle return-by-reference differently, since there is no actual reference that
+//         // gets bound. (The runtimeLookup for the return entity would yield null). Instead, we just
+//         // set the return object for the enclosing function to the evaluated argument (which should
+//         // have yielded an object).
+//         if (isA(this.entity.type, Types.Reference)) {
+//             inst.containingRuntimeFunction().setReturnValue(inst.childInstances.args[0].evalResult);
+//             this.done(sim, inst);
+//             return;
+//         }
+//         return ReturnInitializer._parent.stepForward.apply(this, arguments);
+//     }
+// });
+// export var MemberInitializer = DirectInitializer.extend({
+//     _name : "MemberInitializer",
+//     isMemberInitializer: true
+// });
+// export var DefaultMemberInitializer = DefaultInitializer.extend({
+//     _name : "DefaultMemberInitializer",
+//     isMemberInitializer: true
+// });
+// export var NewDirectInitializer = DirectInitializer.extend({
+//     _name : "NewDirectInitializer",
+//     i_runtimeConstructClass : RuntimeNewInitializer
+// });
+// export var NewDefaultInitializer = DefaultInitializer.extend({
+//     _name : "NewDefaultInitializer",
+//     i_runtimeConstructClass : RuntimeNewInitializer
+// });
 class ListInitializer extends Initializer {
     static create(context, target, args) {
         if (target.type.isReferenceType()) { // check for presence of bindTo to detect reference entities
@@ -54454,6 +54637,7 @@ class ArrayAggregateInitializer extends ListInitializer {
         this.target = target;
         let arraySize = target.type.numElems;
         if (args.length > arraySize) {
+            // TODO: this seems like a weird error to give. why not something more specific?
             this.addNote(errors_1.CPPError.param.numParams(this));
             // No need to bail out, though. We can still generate initializers
             // for all of the arguments that do correspond to an in-bounds element.
@@ -54646,6 +54830,574 @@ function isQualifiedIdentifier(id) {
     return typeof id !== "string";
 }
 exports.isQualifiedIdentifier = isQualifiedIdentifier;
+
+
+/***/ }),
+
+/***/ 2328:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.RuntimeDeleteArrayExpression = exports.DeleteArrayExpression = exports.RuntimeDeleteExpression = exports.DeleteExpression = exports.RuntimeNewArrayExpression = exports.NewArrayExpression = exports.RuntimeNewExpression = exports.NewExpression = exports.createNewExpressionFromAST = void 0;
+const Simulation_1 = __webpack_require__(2295);
+const types_1 = __webpack_require__(8716);
+const errors_1 = __webpack_require__(5244);
+const entities_1 = __webpack_require__(8397);
+const util_1 = __webpack_require__(6560);
+const expressionBase_1 = __webpack_require__(9180);
+const codeOutlets_1 = __webpack_require__(3004);
+const FunctionCall_1 = __webpack_require__(20);
+const initializers_1 = __webpack_require__(1288);
+const declarations_1 = __webpack_require__(8963);
+const expressions_1 = __webpack_require__(6597);
+function createNewExpressionFromAST(ast, context) {
+    // Need to create TypeSpecifier first to get the base type for the declarator
+    let typeSpec = declarations_1.TypeSpecifier.createFromAST(ast.specs, context);
+    let baseType = typeSpec.baseType;
+    // Create declarator and determine declared type
+    let declarator = declarations_1.Declarator.createFromAST(ast.declarator, context, baseType);
+    let createdType = declarator.type;
+    if (createdType && types_1.isPotentiallyCompleteArrayType(createdType)) {
+        // TODO new array expression
+        return new NewArrayExpression(context, ast, typeSpec, declarator, createdType);
+    }
+    else {
+        return new NewExpression(context, ast, typeSpec, declarator, createdType);
+    }
+}
+exports.createNewExpressionFromAST = createNewExpressionFromAST;
+class NewExpression extends expressionBase_1.Expression {
+    constructor(context, ast, typeSpecifier, declarator, createdType) {
+        super(context, ast);
+        this.construct_type = "new_expression";
+        this.valueCategory = "prvalue";
+        util_1.assert(!createdType || !declarator.type || types_1.sameType(createdType, declarator.type));
+        this.attach(this.typeSpecifier = typeSpecifier);
+        this.attach(this.declarator = declarator);
+        if (!createdType) {
+            // If we don't have a viable type to create
+            return;
+        }
+        if (!types_1.isCompleteObjectType(createdType)) {
+            this.addNote(errors_1.CPPError.expr.new.unsupported_type(this, createdType));
+            return;
+        }
+        this.createdType = createdType;
+        this.type = new types_1.PointerType(createdType);
+        let initAST = ast.initializer;
+        let newEntity = new entities_1.NewObjectEntity(createdType);
+        let initializer = !initAST ?
+            initializers_1.DefaultInitializer.create(context, newEntity) :
+            initAST.construct_type === "direct_initializer" ?
+                initializers_1.DirectInitializer.create(context, newEntity, initAST.args.map((a) => expressions_1.createExpressionFromAST(a, context)), "direct") :
+                initAST.construct_type === "list_initializer" ?
+                    initializers_1.ListInitializer.create(context, newEntity, initAST.arg.elements.map((a) => expressions_1.createExpressionFromAST(a, context))) :
+                    util_1.assertNever(initAST);
+        if (initializer.construct_type !== "invalid_construct") {
+            this.attach(this.initializer = initializer);
+        }
+        else {
+            this.attach(initializer);
+        }
+    }
+    createDefaultOutlet(element, parent) {
+        return new codeOutlets_1.NewExpressionOutlet(element, this, parent);
+    }
+    describeEvalResult(depth) {
+        throw new Error("Method not implemented.");
+    }
+}
+exports.NewExpression = NewExpression;
+class RuntimeNewExpression extends expressionBase_1.RuntimeExpression {
+    constructor(model, parent) {
+        var _a;
+        super(model, parent);
+        this.index = 0;
+        this.initializer = (_a = this.model.initializer) === null || _a === void 0 ? void 0 : _a.createRuntimeInitializer(this);
+    }
+    upNextImpl() {
+        if (this.index === 1) {
+            this.initializer && this.sim.push(this.initializer);
+            ++this.index;
+        }
+    }
+    stepForwardImpl() {
+        if (this.index === 0) {
+            this.allocatedObject = this.sim.memory.heap.allocateNewObject(this.model.createdType);
+            ++this.index;
+        }
+        else {
+            this.setEvalResult(this.allocatedObject.getPointerTo());
+            this.startCleanup();
+        }
+    }
+}
+exports.RuntimeNewExpression = RuntimeNewExpression;
+class NewArrayExpression extends expressionBase_1.Expression {
+    constructor(context, ast, typeSpecifier, declarator, createdType) {
+        super(context, ast);
+        this.construct_type = "new_array_expression";
+        this.valueCategory = "prvalue";
+        util_1.assert(!createdType || !declarator.type || types_1.sameType(createdType, declarator.type));
+        this.attach(this.typeSpecifier = typeSpecifier);
+        this.attach(this.declarator = declarator);
+        this.createdType = createdType;
+        this.type = createdType.adjustToPointerType();
+        if (createdType.isArrayOfUnknownBoundType()) {
+            if (createdType.sizeExpressionAST) {
+                let sizeExp = expressions_1.createExpressionFromAST(createdType.sizeExpressionAST, context);
+                if (sizeExp.isWellTyped()) {
+                    let convertedSizeExp = expressions_1.standardConversion(sizeExp, types_1.Int.INT);
+                    if (!types_1.isType(convertedSizeExp.type, types_1.Int)) {
+                        convertedSizeExp.addNote(errors_1.CPPError.expr.new_array.integer_length_required(sizeExp));
+                    }
+                    this.attach(this.dynamicLengthExpression = convertedSizeExp);
+                }
+                else {
+                    this.attach(this.dynamicLengthExpression = sizeExp);
+                }
+            }
+            else {
+                this.addNote(errors_1.CPPError.expr.new_array.length_required(this));
+            }
+        }
+        this.allocatedArray = new entities_1.NewArrayEntity(createdType);
+        let initAST = ast.initializer;
+        if (!initAST) {
+            this.fallbackElementInitializer = initializers_1.DefaultInitializer.create(context, new entities_1.DynamicLengthArrayNextElementEntity(this.allocatedArray));
+            this.individualElementInitializers = [];
+        }
+        else if (initAST.construct_type === "direct_initializer") {
+            this.addNote(errors_1.CPPError.expr.new_array.direct_initialization_prohibited(this));
+        }
+        else if (initAST.construct_type === "list_initializer") {
+            // TODO: should be value-initialization
+            this.fallbackElementInitializer = initializers_1.DefaultInitializer.create(context, new entities_1.DynamicLengthArrayNextElementEntity(this.allocatedArray));
+            this.individualElementInitializers = initAST.arg.elements.map((arg, i) => initializers_1.DirectInitializer.create(context, new entities_1.DynamicLengthArrayNextElementEntity(this.allocatedArray), [expressions_1.createExpressionFromAST(arg, context)], "direct"));
+        }
+        this.fallbackElementInitializer && this.attach(this.fallbackElementInitializer);
+        this.individualElementInitializers && this.attachAll(this.individualElementInitializers);
+    }
+    createDefaultOutlet(element, parent) {
+        return new codeOutlets_1.NewArrayExpressionOutlet(element, this, parent);
+    }
+    describeEvalResult(depth) {
+        throw new Error("Method not implemented.");
+    }
+}
+exports.NewArrayExpression = NewArrayExpression;
+class RuntimeNewArrayExpression extends expressionBase_1.RuntimeExpression {
+    constructor(model, parent) {
+        super(model, parent);
+        this.elemInitIndex = 0;
+        if (this.model.dynamicLengthExpression) {
+            this.dynamicLengthExpression = expressions_1.createRuntimeExpression(this.model.dynamicLengthExpression, this);
+        }
+    }
+    upNextImpl() {
+        if (this.dynamicLengthExpression && !this.dynamicLengthExpression.isDone) {
+            this.sim.push(this.dynamicLengthExpression);
+            return;
+        }
+        if (!this.allocatedObject) {
+            return; // wait for a stepForward
+        }
+        if (this.elemInitIndex < this.allocatedObject.type.numElems) {
+            util_1.asMutable(this).nextElemToInit = this.allocatedObject.getArrayElemSubobject(this.elemInitIndex);
+            this.sim.push(this.elementInitializers[this.elemInitIndex]);
+            ++this.elemInitIndex;
+        }
+    }
+    stepForwardImpl() {
+        if (this.elemInitIndex === 0) {
+            let createdType = this.model.createdType.isBoundedArrayType()
+                ? this.model.createdType
+                : new types_1.BoundedArrayType(this.model.createdType.elemType, this.dynamicLengthExpression.evalResult.rawValue);
+            this.allocatedObject = this.sim.memory.heap.allocateNewObject(createdType);
+            let numInits = this.model.individualElementInitializers.length;
+            let numElems = this.allocatedObject.type.numElems;
+            if (numInits > numElems) {
+                // I got a bad_alloc when I tried this in g++
+                this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, `There are ${numInits} initializers, but only ${numElems} in the dynamically allocated array.`);
+            }
+            util_1.asMutable(this).elementInitializers = this.allocatedObject.getArrayElemSubobjects().map((elemObj, i) => i < numInits
+                ? this.model.individualElementInitializers[i].createRuntimeInitializer(this)
+                : this.model.fallbackElementInitializer.createRuntimeInitializer(this));
+        }
+        else {
+            this.setEvalResult(this.allocatedObject.decayToPointer());
+            this.startCleanup();
+        }
+    }
+}
+exports.RuntimeNewArrayExpression = RuntimeNewArrayExpression;
+// export var NewExpression = Expression.extend({
+//     _name: "NewExpression",
+//     valueCategory: "prvalue",
+//     initIndex: "allocate",
+//     compile : function(){
+//         // Compile the type specifier
+//         this.typeSpec = TypeSpecifier.instance(this.ast.specs, {parent:this});
+//         this.typeSpec.compile();
+//         this.heapType = this.typeSpec.type;
+//         // Compile declarator if it exists
+//         if(this.ast.declarator) {
+//             this.declarator = Declarator.instance(this.ast.declarator, {parent: this});
+//             this.declarator.compile({baseType: this.heapType});
+//             this.heapType = this.declarator.type;
+//         }
+//         if (isA(this.heapType, Types.Array)){
+//             // Note: this is Pointer, rather than ArrayPointer, since the latter should only be used in runtime contexts
+//             this.type = Types.Pointer.instance(this.heapType.elemType);
+//             if (this.declarator.dynamicLengthExpression){
+//                 this.dynamicLength = this.i_createAndCompileChildExpr(this.declarator.dynamicLengthExpression, Types.Int.instance());
+//                 this.initIndex = "length";
+//             }
+//         }
+//         else {
+//             this.type = Types.Pointer.instance(this.heapType);
+//         }
+//         var entity = NewObjectEntity.instance(this.heapType);
+//         var initCode = this.ast.initializer || {args: []};
+//         if (isA(this.heapType, Types.Class) || initCode.args.length == 1){
+//             this.initializer = NewDirectInitializer.instance(initCode, {parent: this});
+//             this.initializer.compile(entity);
+//         }
+//         else if (initCode.args.length == 0){
+//             this.initializer = NewDefaultInitializer.instance(initCode, {parent: this});
+//             this.initializer.compile(entity);
+//         }
+//         else{
+//             this.addNote(CPPError.declaration.init.scalar_args(this, this.heapType));
+//         }
+//         this.compileTemporarires();
+//     },
+//     createInstance : function(sim, parent){
+//         var inst = Expression.createInstance.apply(this, arguments);
+//         inst.initializer = this.initializer.createInstance(sim, inst);
+//         return inst;
+//     },
+//     upNext : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         if (inst.index === "length"){
+//             inst.dynamicLength = this.dynamicLength.createAndPushInstance(sim, inst);
+//             inst.index = "allocate";
+//             return true;
+//         }
+//         else if (inst.index === "init"){
+//             sim.push(inst.initializer);
+//             inst.index = "operate";
+//             return true;
+//         }
+//     },
+//     stepForward : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         // Dynamic memory - doesn't get added to any scope, but we create on the heap
+//         if (inst.index === "allocate") {
+//             var heapType = this.heapType;
+//             // If it's an array, we need to use the dynamic length
+//             if (this.dynamicLength) {
+//                 var len = inst.dynamicLength.evalResult.rawValue();
+//                 if (len === 0){
+//                     sim.alert("Sorry, but I can't allocate a dynamic array of zero length. I know there's technically an old C-style hack that uses zero-length arrays, but hey, I'm just a lobster. I'll go ahead and allocate an array of length 1 instead.");
+//                     len = 1;
+//                 }
+//                 else if (len < 0){
+//                     sim.undefinedBehavior("I can't allocate an array of negative length. That doesn't even make sense. I'll just allocate an array of length 1 instead.");
+//                     len = 1;
+//                 }
+//                 heapType = Types.Array.instance(this.heapType.elemType, len);
+//             }
+//             var obj = DynamicObject.instance(heapType);
+//             sim.memory.heap.allocateNewObject(obj);
+//             sim.i_pendingNews.push(obj);
+//             inst.i_allocatedObject = obj;
+//             inst.initializer.setAllocatedObject(obj);
+//             inst.index = "init"; // Always use an initializer. If there isn't one, then it will just be default
+//             //if (this.initializer){
+//             //    inst.index = "init";
+//             //}
+//             //else{
+//             //    inst.index = "operate";
+//             //}
+//             //return true;
+//         }
+//         else if (inst.index === "operate") {
+//             if (isA(this.heapType, Types.Array)){
+//                 // RTTI for array pointer
+//                 inst.setEvalResult(Value.instance(inst.i_allocatedObject.address, Types.ArrayPointer.instance(inst.i_allocatedObject)));
+//             }
+//             else{
+//                 // RTTI for object pointer
+//                 inst.setEvalResult(Value.instance(inst.i_allocatedObject.address, Types.ObjectPointer.instance(inst.i_allocatedObject)));
+//             }
+//             sim.i_pendingNews.pop();
+//             this.done(sim, inst);
+//         }
+//     },
+//     explain : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         if (this.initializer){
+//             return {message: "A new object of type " + this.heapType.describe().name + " will be created on the heap. " + this.initializer.explain(sim, inst.initializer).message};
+//         }
+//         else{
+//             return {message: "A new object of type " + this.heapType.describe().name + " will be created on the heap."};
+//         }
+//     }
+// });
+class DeleteExpression extends expressionBase_1.Expression {
+    constructor(context, ast, operand) {
+        var _a;
+        super(context, ast);
+        this.construct_type = "delete_expression";
+        this.type = types_1.VoidType.VOID;
+        this.valueCategory = "prvalue";
+        this.operator = "delete";
+        if (!operand.isWellTyped()) {
+            this.attach(this.operand = operand);
+            return;
+        }
+        if (!operand.type.isPointerType()) {
+            this.addNote(errors_1.CPPError.expr.delete.pointer(this, operand.type));
+            this.attach(this.operand = operand);
+            return;
+        }
+        if (!operand.type.isPointerToCompleteObjectType()) {
+            this.addNote(errors_1.CPPError.expr.delete.pointerToObjectType(this, operand.type));
+            this.attach(this.operand = operand);
+            return;
+        }
+        // Note that this comes after the pointer check, which is intentional
+        operand = expressions_1.convertToPRValue(operand);
+        this.operand = operand;
+        // This should still be true, assertion for type system
+        util_1.assert((_a = operand.type) === null || _a === void 0 ? void 0 : _a.isPointerToCompleteObjectType());
+        let destroyedType = operand.type.ptrTo;
+        if (destroyedType.isCompleteClassType()) {
+            let dtor = destroyedType.classDefinition.destructor;
+            if (dtor) {
+                let dtorCall = new FunctionCall_1.FunctionCall(context, dtor, [], destroyedType);
+                this.attach(this.dtor = dtorCall);
+            }
+            else {
+                this.addNote(errors_1.CPPError.expr.delete.no_destructor(this, destroyedType));
+            }
+        }
+    }
+    static createFromAST(ast, context) {
+        return new DeleteExpression(context, ast, expressions_1.createExpressionFromAST(ast.operand, context));
+    }
+    createDefaultOutlet(element, parent) {
+        return new codeOutlets_1.DeleteExpressionOutlet(element, this, parent);
+    }
+    describeEvalResult(depth) {
+        throw new Error("Method not implemented.");
+    }
+}
+exports.DeleteExpression = DeleteExpression;
+class RuntimeDeleteExpression extends expressionBase_1.RuntimeExpression {
+    constructor(model, parent) {
+        super(model, parent);
+        this.operand = expressions_1.createRuntimeExpression(this.model.operand, this);
+    }
+    upNextImpl() {
+        if (!this.operand.isDone) {
+            this.sim.push(this.operand);
+        }
+        else if (types_1.PointerType.isNull(this.operand.evalResult.rawValue)) {
+            // delete on a null pointer does nothing
+            this.startCleanup();
+        }
+        else if (this.model.dtor && !this.dtor) {
+            let obj = this.sim.memory.dereference(this.operand.evalResult);
+            if (!obj.hasStorage("dynamic")) {
+                this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Invalid delete");
+                this.startCleanup();
+                return;
+            }
+            else if (!obj.isAlive) {
+                this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Double free");
+                this.startCleanup();
+                return;
+            }
+            else if (obj.isTyped(types_1.isBoundedArrayType)) {
+                this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Invalid use of regular delete on array");
+                this.startCleanup();
+                return;
+            }
+            else {
+                util_1.asMutable(this).destroyedObject = obj;
+                if (obj.isTyped(types_1.isCompleteClassType)) {
+                    let dtor = this.model.dtor.createRuntimeFunctionCall(this, obj);
+                    util_1.asMutable(this).dtor = dtor;
+                    this.sim.push(dtor);
+                }
+            }
+        }
+    }
+    stepForwardImpl() {
+        this.sim.memory.heap.deleteObject(this.destroyedObject);
+        this.startCleanup();
+    }
+}
+exports.RuntimeDeleteExpression = RuntimeDeleteExpression;
+class DeleteArrayExpression extends expressionBase_1.Expression {
+    constructor(context, ast, operand) {
+        var _a;
+        super(context, ast);
+        this.construct_type = "delete_array_expression";
+        this.type = types_1.VoidType.VOID;
+        this.valueCategory = "prvalue";
+        this.operator = "delete";
+        if (!operand.isWellTyped()) {
+            this.attach(this.operand = operand);
+            return;
+        }
+        if (!operand.type.isPointerType()) {
+            this.addNote(errors_1.CPPError.expr.delete.pointer(this, operand.type));
+            this.attach(this.operand = operand);
+            return;
+        }
+        if (!operand.type.isPointerToCompleteObjectType()) {
+            this.addNote(errors_1.CPPError.expr.delete.pointerToObjectType(this, operand.type));
+            this.attach(this.operand = operand);
+            return;
+        }
+        if (!operand.type.ptrTo.isArrayElemType()) {
+            this.addNote(errors_1.CPPError.expr.delete.pointerToArrayElemType(this, operand.type));
+            this.attach(this.operand = operand);
+            return;
+        }
+        // Note that the prvalue conversion comes after type checking
+        // An implication of this is you can't give an array directly to
+        // delete, since it won't decay into a pointer. But there's really
+        // no good reason you would ever do that, since any dynamically allocated
+        // array will have already decayed to a pointer
+        operand = expressions_1.convertToPRValue(operand);
+        this.operand = operand;
+        // This should still be true, assertion for type system
+        util_1.assert((_a = operand.type) === null || _a === void 0 ? void 0 : _a.isPointerToCompleteObjectType());
+        let destroyedType = operand.type.ptrTo;
+        if (destroyedType.isCompleteClassType()) {
+            let dtor = destroyedType.classDefinition.destructor;
+            if (dtor) {
+                let dtorCall = new FunctionCall_1.FunctionCall(context, dtor, [], destroyedType);
+                this.attach(this.elementDtor = dtorCall);
+            }
+            else {
+                this.addNote(errors_1.CPPError.expr.delete.no_destructor(this, destroyedType));
+            }
+        }
+    }
+    static createFromAST(ast, context) {
+        return new DeleteArrayExpression(context, ast, expressions_1.createExpressionFromAST(ast.operand, context));
+    }
+    createDefaultOutlet(element, parent) {
+        return new codeOutlets_1.DeleteArrayExpressionOutlet(element, this, parent);
+    }
+    describeEvalResult(depth) {
+        throw new Error("Method not implemented.");
+    }
+}
+exports.DeleteArrayExpression = DeleteArrayExpression;
+class RuntimeDeleteArrayExpression extends expressionBase_1.RuntimeExpression {
+    constructor(model, parent) {
+        super(model, parent);
+        this.index = 0;
+        this.dtors = [];
+        this.operand = expressions_1.createRuntimeExpression(this.model.operand, this);
+    }
+    upNextImpl() {
+        if (!this.operand.isDone) {
+            this.sim.push(this.operand);
+            return;
+        }
+        if (!this.targetArray) {
+            if (types_1.PointerType.isNull(this.operand.evalResult.rawValue)) {
+                // delete on a null pointer does nothing
+                this.startCleanup();
+                return;
+            }
+            let ptr = this.operand.evalResult;
+            let targetObject = ptr.isTyped(types_1.isArrayPointerType)
+                ? ptr.type.arrayObject
+                : this.sim.memory.dereference(ptr);
+            if (!targetObject.hasStorage("dynamic")) {
+                this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Invalid delete");
+                this.startCleanup();
+                return;
+            }
+            else if (!targetObject.isAlive) {
+                this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Double free");
+                this.startCleanup();
+                return;
+            }
+            else if (!targetObject.isTyped(types_1.isBoundedArrayType)) {
+                this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Invalid use of array delete[] on non-array");
+                this.startCleanup();
+                return;
+            }
+            util_1.asMutable(this).targetArray = targetObject;
+        }
+        if (this.targetArray && this.model.elementDtor && this.index < this.targetArray.type.numElems) {
+            let elem = this.targetArray.getArrayElemSubobject(this.index++);
+            if (elem.isTyped(types_1.isCompleteClassType)) {
+                let dtor = this.model.elementDtor.createRuntimeFunctionCall(this, elem);
+                util_1.asMutable(this.dtors).push(dtor);
+                this.sim.push(dtor);
+                return;
+            }
+        }
+    }
+    stepForwardImpl() {
+        if (this.targetArray) {
+            this.sim.memory.heap.deleteObject(this.targetArray);
+            this.startCleanup();
+        }
+    }
+}
+exports.RuntimeDeleteArrayExpression = RuntimeDeleteArrayExpression;
+// If it's an array pointer, just grab array object to delete from RTTI.
+//             // Otherwise ask memory what object it's pointing to.
+//             var obj;
+//             if (isA(ptr.type, Types.ArrayPointer)){
+//                 obj = ptr.type.arrObj;
+//             }
+//             else{
+//                 obj = sim.memory.dereference(ptr);
+//             }
+//             if (!isA(obj, DynamicObject)) {
+//                 if (isA(obj, AutoObject)) {
+//                     sim.undefinedBehavior("Oh no! The pointer you gave to <span class='code'>delete</span> was pointing to something on the stack!");
+//                 }
+//                 else {
+//                     sim.undefinedBehavior("Oh no! The pointer you gave to <span class='code'>delete</span> wasn't pointing to a valid heap object.");
+//                 }
+//                 this.done(sim, inst);
+//                 return;
+//             }
+//             if (isA(obj.type, Types.Array)){
+//                 sim.undefinedBehavior("You tried to delete an array object with a <span class='code'>delete</span> expression. Did you forget to use the delete[] syntax?");
+//                 this.done(sim, inst);
+//                 return;
+//             }
+//             //if (!similarType(obj.type, this.operand.type.ptrTo)) {
+//             //    sim.alert("The type of the pointer you gave to <span class='code'>delete</span> is different than the type of the object I found on the heap - that's a bad thing!");
+//             //    this.done(sim, inst);
+//             //    return;
+//             //}
+//             if (!obj.isAlive()) {
+//                 DeadObjectMessage.instance(obj, {fromDelete:true}).display(sim, inst);
+//                 this.done(sim, inst);
+//                 return;
+//             }
+//             inst.alreadyDestructed = true;
+//             if(this.funcCall){
+//                 // Set obj as receiver for virtual destructor lookup
+//                 var dest = this.funcCall.createAndPushInstance(sim, inst, obj);
+//             }
+//             else{
+//                 return true;
+//             }
 
 
 /***/ }),
@@ -54865,6 +55617,10 @@ class CPPObject {
     }
     getPointerTo() {
         return new runtimeEnvironment_1.Value(this.address, new types_1.ObjectPointerType(this));
+    }
+    // Only allowed if receiver matches CPPObject<ArrayType<Elem_type>>
+    decayToPointer() {
+        return this.getArrayElemSubobject(0).getPointerTo();
     }
     getValue(read = false) {
         let val = this.data.getValue(this._isValid);
@@ -55973,6 +56729,7 @@ MemoryHeap._name = "MemoryHeap";
 class MemoryFrame {
     constructor(memory, start, rtFunc) {
         this.observable = new observe_1.Observable(this);
+        this.localObjectsByName = {};
         this.localObjectsByEntityId = {};
         this.localReferencesByEntityId = {};
         this.memory = memory;
@@ -55995,6 +56752,7 @@ class MemoryFrame {
             let obj = new objects_1.AutoObject(objEntity.definition, objEntity.type, memory, addr);
             this.memory.allocateObject(obj);
             this.localObjectsByEntityId[objEntity.entityId] = obj;
+            this.localObjectsByName[obj.name] = obj;
             // Move on to next address afterward
             addr += obj.size;
             this.size += obj.size;
@@ -56057,7 +56815,7 @@ const Simulation_1 = __webpack_require__(2295);
 const simOutlets_1 = __webpack_require__(9357);
 const initializers_1 = __webpack_require__(1288);
 const entities_1 = __webpack_require__(8397);
-const PotentialFullExpression_1 = __webpack_require__(2593);
+const FunctionCall_1 = __webpack_require__(20);
 class SynchronousSimulationRunner {
     constructor(simulation) {
         this.simulation = simulation;
@@ -56116,6 +56874,21 @@ class SynchronousSimulationRunner {
         }
     }
     /**
+     * Repeatedly steps forward until just before main will exit
+     */
+    stepToEndOfMain(stepLimit, stopOnCinBlock = false) {
+        var _a;
+        return __awaiter(this, void 0, void 0, function* () {
+            let stepsTaken = 0;
+            while (((_a = this.simulation.top()) === null || _a === void 0 ? void 0 : _a.model) !== this.simulation.program.mainFunction.body.localDeallocator
+                && (!stopOnCinBlock || !this.simulation.isBlockingUntilCin)
+                && (stepLimit === undefined || stepsTaken < stepLimit)) {
+                this.stepForward();
+                ++stepsTaken;
+            }
+        });
+    }
+    /**
      * If a function call is up next, repeatedly steps forward until the function call
      * has completely finished executing. Otherwise, equivalent to a stepForward(1).
      * Note that this does not skip over the evaluation of arguments for a function call,
@@ -56124,7 +56897,7 @@ class SynchronousSimulationRunner {
      */
     stepOver() {
         let top = this.simulation.top();
-        if (top instanceof PotentialFullExpression_1.FunctionCall) {
+        if (top instanceof FunctionCall_1.FunctionCall) {
             while (!top.isDone) {
                 this.simulation.stepForward();
             }
@@ -56287,7 +57060,7 @@ class AsynchronousSimulationRunner {
         var _a;
         return __awaiter(this, void 0, void 0, function* () {
             let stepsTaken = 0;
-            while (((_a = this.simulation.top()) === null || _a === void 0 ? void 0 : _a.model) !== this.simulation.program.mainFunction
+            while (((_a = this.simulation.top()) === null || _a === void 0 ? void 0 : _a.model) !== this.simulation.program.mainFunction.body.localDeallocator
                 && (!stopOnCinBlock || !this.simulation.isBlockingUntilCin)
                 && (stepLimit === undefined || stepsTaken < stepLimit)) {
                 yield this.takeOneAction(Simulation_1.STEP_FORWARD_ACTION, delay);
@@ -56337,7 +57110,7 @@ class AsynchronousSimulationRunner {
             // if (top instanceof RuntimeFunctionCall) {
             top = this.simulation.top();
             while (top && !originalTop.isDone && (top.model.context.isLibrary
-                || (top instanceof PotentialFullExpression_1.RuntimeFunctionCall && top.calledFunction.model.context.isLibrary)
+                || (top instanceof FunctionCall_1.RuntimeFunctionCall && top.calledFunction.model.context.isLibrary)
                 || (top instanceof initializers_1.RuntimeDirectInitializer && top.model.target instanceof entities_1.PassByReferenceParameterEntity && top.model.target.calledFunction.firstDeclaration.context.isLibrary)
                 || (top instanceof initializers_1.RuntimeDirectInitializer && top.model.target instanceof entities_1.PassByValueParameterEntity && top.model.target.calledFunction.firstDeclaration.context.isLibrary))) {
                 yield this.takeOneAction(Simulation_1.STEP_FORWARD_ACTION, delay);
@@ -56432,7 +57205,7 @@ const util_1 = __webpack_require__(6560);
 const codeOutlets_1 = __webpack_require__(3004);
 const functions_1 = __webpack_require__(2367);
 const predicates_1 = __webpack_require__(941);
-const PotentialFullExpression_1 = __webpack_require__(2593);
+const FunctionCall_1 = __webpack_require__(20);
 const StatementConstructsMap = {
     "labeled_statement": (ast, context) => new UnsupportedStatement(context, ast, "labeled statement"),
     "block": (ast, context) => Block.createFromAST(ast, context),
@@ -56781,7 +57554,7 @@ class LocalDeallocator extends constructs_1.BasicCPPConstruct {
             if (local.variableKind === "object" && local.isTyped(types_1.isCompleteClassType)) {
                 let dtor = local.type.classDefinition.destructor;
                 if (dtor) {
-                    let dtorCall = new PotentialFullExpression_1.FunctionCall(context, dtor, [], local.type);
+                    let dtorCall = new FunctionCall_1.FunctionCall(context, dtor, [], local.type);
                     this.attach(dtorCall);
                     return dtorCall;
                 }
@@ -56804,12 +57577,14 @@ class RuntimeLocalDeallocator extends constructs_1.RuntimeConstruct {
         this.index = this.model.context.blockLocals.localVariables.length - 1;
     }
     upNextImpl() {
-        var _a;
-        let locals = this.model.context.blockLocals.localVariables;
         if (this.justDestructed) {
             this.sim.memory.killObject(this.justDestructed, this);
             this.justDestructed = undefined;
         }
+    }
+    stepForwardImpl() {
+        var _a;
+        let locals = this.model.context.blockLocals.localVariables;
         while (this.index >= 0) {
             // Destroy local at given index
             let local = locals[this.index];
@@ -56841,10 +57616,37 @@ class RuntimeLocalDeallocator extends constructs_1.RuntimeConstruct {
         }
         this.startCleanup();
     }
-    stepForwardImpl() {
-    }
 }
 exports.RuntimeLocalDeallocator = RuntimeLocalDeallocator;
+// export class OpaqueStatement extends StatementBase implements SuccessfullyCompiled {
+//     public _t_isCompiled: never;
+//     private readonly effects: (rtBlock: RuntimeOpaqueStatement) => void;
+//     public constructor(context: BlockContext, effects: (rtBlock: RuntimeOpaqueStatement) => void) {
+//         super(context);
+//         this.effects = effects;
+//     }
+//     public createRuntimeStatement(parent: RuntimeStatement | RuntimeFunction) {
+//         return new RuntimeOpaqueStatement(this, parent, this.effects);
+//     }
+// }
+// export class RuntimeOpaqueStatement extends RuntimeStatement<OpaqueStatement> {
+//     private effects: (rtBlock: RuntimeOpaqueStatement) => void;
+//     public constructor (model: OpaqueStatement, parent: RuntimeStatement | RuntimeFunction, effects: (rtBlock: RuntimeOpaqueStatement) => void) {
+//         super(model, parent);
+//         this.effects = effects;
+//     }
+//     protected upNextImpl() {
+//         // Nothing to do
+//     }
+//     public stepForwardImpl() {
+//         this.effects(this);
+//         this.startCleanup();
+//     }
+//     // isTailChild : function(child){
+//     //     return {isTail: true,
+//     //         reason: "The recursive call is immediately followed by a return."};
+//     // }
+// }
 class IfStatement extends Statement {
     constructor(context, ast, condition, then, otherwise) {
         super(context, ast);
@@ -57032,6 +57834,7 @@ class ForStatement extends Statement {
         if (post) {
             this.attach(this.post = post);
         }
+        this.attach(this.localDeallocator = new LocalDeallocator(context));
     }
     // The constructor above poses a conundrum. It asks that
     // we pass in fully instantiated, ready-to-go child constructs
@@ -57045,7 +57848,6 @@ class ForStatement extends Statement {
     // of building, situating, and connecting together all the
     // constructs correctly.
     static createFromAST(ast, outerContext) {
-        let loopContext = constructs_1.createLoopContext(outerContext);
         // The context parameter to this function tells us what
         // context the for loop originally occurs in. For example, in:
         // void func() {
@@ -57056,17 +57858,36 @@ class ForStatement extends Statement {
         // `context` refers to the function body block context for `func`
         // Below, we'll also consider the body block context of the inner
         // set of curly braces for the for loop.
-        // Let's create the body block context first.
+        // For loops are kind of obnoxious when it comes to scopes and object lifetimes
+        // because any variables declared in the init-statement part have a different
+        // block lifetime but the same block scope as variables in the body of the loop.
+        // For example:
+        //   int i = 0;
+        //   for(A a; i < 10; ++i) {
+        //     int i; // allowed, different scope as previous i
+        //     int a; // not allowed, same scope as earlier a
+        //     B b;
+        //     cout << i << endl;
+        //   }
+        //   In the above, even though A a; and B b; are in the same scope (as evidenced
+        //   by not being allowed to declare the second a right above b), the A ctor/dtor
+        //   will only run once, whereas there are 10 separate objects called b and the
+        //   B ctor/dtor runs 10 times
+        // Outer context for local variables including any declared in the init-statement or condition
+        let loopBlockContext = constructs_1.createBlockContext(constructs_1.createLoopContext(outerContext));
+        let initial = createStatementFromAST(ast.initial, loopBlockContext);
+        let condition = expressions_1.createExpressionFromAST(ast.condition, loopBlockContext);
+        // Inner block context for local variables actually inside the loop body curly braces.
         // We always do this, even if the body isn't a block in the source code:
         //    for(...) stmt; is treated equivalently
         // to for(...) { stmt; } according to the C++ standard.
-        let bodyBlockContext = constructs_1.createBlockContext(loopContext);
+        // Note that this is a separate block context from the outer one for the loop, so variables
+        // in here will have a different lifetime, but we share the same scope as the outer loop block context
+        let bodyBlockContext = constructs_1.createBlockContext(loopBlockContext, loopBlockContext.contextualScope);
         // NOTE: the use of the body block context for all the children.
         // e.g. for(int i = 0; i < 10; ++i) { cout << i; }
         // All children (initial, condition, post, body) share the same block
         // context and scope where i is declared.
-        let initial = createStatementFromAST(ast.initial, bodyBlockContext);
-        let condition = expressions_1.createExpressionFromAST(ast.condition, bodyBlockContext);
         // If the body is a block, we have to create it using the ctor rather than
         // the createFromAST function, because that function implicitly creates a
         // new block context, which we already did above for bodyBlockContext. And we
@@ -57075,7 +57896,7 @@ class ForStatement extends Statement {
             ? createStatementFromAST(ast.body, bodyBlockContext)
             : new Block(bodyBlockContext, ast.body, ast.body.statements.map(s => createStatementFromAST(s, bodyBlockContext)));
         let post = ast.post && expressions_1.createExpressionFromAST(ast.post, bodyBlockContext);
-        return new ForStatement(loopContext, ast, initial, condition, body, post);
+        return new ForStatement(loopBlockContext, ast, initial, condition, body, post);
         // It's crucial that we handled things this way. Because
         // all of the context-sensitive stuff is handled by the
         // contexts here, the children can all have access to e.g.
@@ -57109,6 +57930,8 @@ class RuntimeForStatement extends RuntimeStatement {
             this.upNextFns = RuntimeForStatement.upNextFns.slice();
             this.upNextFns.splice(3, 1);
         }
+        this.localDeallocator = model.localDeallocator.createRuntimeConstruct(this);
+        this.setCleanupConstruct(this.localDeallocator);
     }
     upNextImpl() {
         this.upNextFns[this.index++](this);
@@ -57146,6 +57969,40 @@ RuntimeForStatement.upNextFns = [
         // Do nothing, pass to stepForward, which will reset
     }
 ];
+// export var Break = Statement.extend({
+//     _name: "Break",
+//     compile : function() {
+//         // Theoretically this could be put into the i_createFromAST function since it only uses
+//         // syntactic information to determine whether the break is inside an iteration statement,
+//         // but it would feel weird to add an error note before the compile function even runs... :/
+//         var container = this.parent;
+//         while(container && !isA(container, Statements.Iteration)){
+//             container = container.parent;
+//         }
+//         this.container = container;
+//         // container should exist, otherwise this break is somewhere it shouldn't be
+//         if (!container || !isA(container, Statements.Iteration)){
+//             this.addNote(CPPError.stmt.breakStatement.location(this, this.condition));
+//         }
+//     },
+//     createAndPushInstance : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         var inst = RuntimeConstruct.instance(sim, this, "break", "stmt", inst);
+//         sim.push(inst);
+//         return inst;
+//     },
+//     stepForward : function(sim: Simulation, rtConstruct: RuntimeConstruct){
+//         if (inst.index == "break"){
+//             var containerInst = inst.findParentByModel(this.container);
+// //            inst.send("returned", {call: func.parent});
+//             containerInst.done(sim); // TODO: should be done with simulation stack instead of parent
+//             // return true;
+//         }
+//     }
+// });
+// export var Continue = Unsupported.extend({
+//     _name: "Statements.Continue",
+//     englishName: "continue statement"
+// });
 
 
 /***/ }),
@@ -57156,8 +58013,8 @@ RuntimeForStatement.upNextFns = [
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.PointerType = exports.toHexadecimalString = exports.Double = exports.Float = exports.FloatingPointType = exports.Bool = exports.Size_t = exports.Int = exports.Char = exports.IntegralType = exports.ArithmeticType = exports.SimpleType = exports.AtomicType = exports.VoidType = exports.isCompleteParameterType = exports.isPotentialParameterType = exports.isCompleteReturnType = exports.isPotentialReturnType = exports.isCompleteObjectType = exports.isIncompleteObjectType = exports.isPotentiallyCompleteObjectType = exports.isVoidType = exports.isFunctionType = exports.isArrayElemType = exports.isPotentiallyCompleteArrayType = exports.isArrayOfUnknownBoundType = exports.isBoundedArrayOfType = exports.isBoundedArrayType = exports.isCompleteClassType = exports.isPotentiallyCompleteClassType = exports.isReferenceToCompleteType = exports.isReferenceType = exports.isObjectPointerType = exports.isArrayPointerToType = exports.isArrayPointerType = exports.isPointerToCompleteType = exports.isPointerToType = exports.isPointerType = exports.isFloatingPointType = exports.isIntegralType = exports.isArithmeticType = exports.isAtomicType = exports.isCvConvertible = exports.referenceRelated = exports.referenceCompatible = exports.covariantType = exports.subType = exports.similarType = exports.sameType = exports.isType = void 0;
-exports.builtInTypes = exports.isBuiltInTypeName = exports.FunctionType = exports.createClassType = exports.ArrayOfUnknownBoundType = exports.BoundedArrayType = exports.peelReference = exports.ReferenceType = exports.ObjectPointerType = exports.ArrayPointerType = void 0;
+exports.ArrayPointerType = exports.PointerType = exports.toHexadecimalString = exports.Double = exports.Float = exports.FloatingPointType = exports.Bool = exports.Size_t = exports.Int = exports.Char = exports.ArithmeticType = exports.SimpleType = exports.AtomicType = exports.VoidType = exports.isCompleteParameterType = exports.isPotentialParameterType = exports.isCompleteReturnType = exports.isPotentialReturnType = exports.isCompleteObjectType = exports.isIncompleteObjectType = exports.isPotentiallyCompleteObjectType = exports.isVoidType = exports.isFunctionType = exports.isArrayElemType = exports.isPotentiallyCompleteArrayType = exports.isArrayOfUnknownBoundType = exports.isBoundedArrayOfType = exports.isBoundedArrayType = exports.isCompleteClassType = exports.isPotentiallyCompleteClassType = exports.isReferenceToCompleteType = exports.isReferenceType = exports.isObjectPointerType = exports.isArrayPointerToType = exports.isArrayPointerType = exports.isPointerToCompleteType = exports.isPointerToType = exports.isPointerType = exports.isFloatingPointType = exports.isIntegralType = exports.isArithmeticType = exports.isAtomicType = exports.isCvConvertible = exports.referenceRelated = exports.referenceCompatible = exports.covariantType = exports.subType = exports.similarType = exports.sameType = exports.isType = void 0;
+exports.builtInTypes = exports.isBuiltInTypeName = exports.FunctionType = exports.createClassType = exports.ArrayOfUnknownBoundType = exports.BoundedArrayType = exports.peelReference = exports.ReferenceType = exports.ObjectPointerType = void 0;
 const util_1 = __webpack_require__(6560);
 const runtimeEnvironment_1 = __webpack_require__(5320);
 var vowels = ["a", "e", "i", "o", "u"];
@@ -57295,7 +58152,10 @@ class TypeBase {
         return this instanceof ArithmeticType;
     }
     isIntegralType() {
-        return this instanceof IntegralType;
+        return this instanceof Char ||
+            this instanceof Int ||
+            this instanceof Size_t ||
+            this instanceof Bool;
     }
     isFloatingPointType() {
         return this instanceof FloatingPointType;
@@ -57691,10 +58551,9 @@ function createErrorParsingResult() {
 class ArithmeticType extends SimpleType {
 }
 exports.ArithmeticType = ArithmeticType;
-class IntegralType extends ArithmeticType {
+class IntegralTypeBase extends ArithmeticType {
 }
-exports.IntegralType = IntegralType;
-class Char extends IntegralType {
+class Char extends IntegralTypeBase {
     constructor() {
         super(...arguments);
         this.simpleType = "char";
@@ -57732,7 +58591,7 @@ class Char extends IntegralType {
 exports.Char = Char;
 Char.CHAR = new Char();
 Char.NULL_CHAR = new runtimeEnvironment_1.Value(0, Char.CHAR);
-class Int extends IntegralType {
+class Int extends IntegralTypeBase {
     constructor() {
         super(...arguments);
         this.simpleType = "int";
@@ -57755,7 +58614,7 @@ exports.Int = Int;
 Int.INT = new Int();
 Int.ZERO = new runtimeEnvironment_1.Value(0, Int.INT);
 ;
-class Size_t extends IntegralType {
+class Size_t extends IntegralTypeBase {
     constructor() {
         super(...arguments);
         this.simpleType = "size_t";
@@ -57775,7 +58634,7 @@ class Size_t extends IntegralType {
     }
 }
 exports.Size_t = Size_t;
-class Bool extends IntegralType {
+class Bool extends IntegralTypeBase {
     constructor() {
         super(...arguments);
         this.simpleType = "bool";
@@ -59809,6 +60668,53 @@ opaqueExpression_1.registerOpaqueExpression("srand", {
 
 /***/ }),
 
+/***/ 3457:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const Program_1 = __webpack_require__(5386);
+Program_1.registerLibraryHeader("iostream", new Program_1.SourceFile("iostream.h", `
+class ostream {};
+
+ostream cout;
+
+const char endl = '\\n';
+
+class istream {
+
+    // bool good() {
+    //     return @istream::good;
+    // }
+
+    // bool bad() {
+    //     return @istream::bad;
+    // }
+
+    // bool fail() {
+    //     return @istream::fail;
+    // }
+
+    // bool eof() {
+    //     return @istream::eof;
+    // }
+
+};
+
+istream cin;
+`, true));
+// registerOpaqueExpression("istream::good", <OpaqueExpressionImpl<Bool, "prvalue">> {
+//     type: Bool.BOOL,
+//     valueCategory: "prvalue",
+//     operate: (rt: RuntimeOpaqueExpression<Bool, "prvalue">) => {
+//         return getSize(rt.contextualReceiver);
+//     }
+// });
+
+
+/***/ }),
+
 /***/ 826:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -59817,6 +60723,7 @@ opaqueExpression_1.registerOpaqueExpression("srand", {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 __webpack_require__(2899);
 __webpack_require__(1842);
+__webpack_require__(3457);
 __webpack_require__(6624);
 __webpack_require__(7296);
 
@@ -62549,207 +63456,206 @@ function peg$parse(input, options) {
     };
     const peg$c317 = function (postfixes) { return { postfixes: postfixes }; };
     const peg$c318 = function (p) { return p; };
-    const peg$c319 = function (size) { return { type: "array", size: size }; };
-    const peg$c320 = function (args) { return { construct_type: "direct_initializer", args: args || [] }; };
-    const peg$c321 = "delete";
-    const peg$c322 = peg$literalExpectation("delete", false);
-    const peg$c323 = function (t) {
+    const peg$c319 = function (args) { return { construct_type: "direct_initializer", args: args || [] }; };
+    const peg$c320 = "delete";
+    const peg$c321 = peg$literalExpectation("delete", false);
+    const peg$c322 = function (t) {
         return track({ construct_type: "delete_expression", operand: t }, location(), text());
     };
-    const peg$c324 = function (t) {
+    const peg$c323 = function (t) {
         return track({ construct_type: "delete_array_expression", operand: t }, location(), text());
     };
-    const peg$c325 = "static_cast";
-    const peg$c326 = peg$literalExpectation("static_cast", false);
-    const peg$c327 = function (t, sub) { return track({ construct_type: "static_cast_expression", type: t, operand: sub }, location(), text()); };
-    const peg$c328 = "dynamic_cast";
-    const peg$c329 = peg$literalExpectation("dynamic_cast", false);
-    const peg$c330 = function (t, sub) { return track({ construct_type: "dynamic_cast_expression", type: t, operand: sub }, location(), text()); };
-    const peg$c331 = "reinterpret_cast";
-    const peg$c332 = peg$literalExpectation("reinterpret_cast", false);
-    const peg$c333 = function (t, sub) { return track({ construct_type: "reinterpret_cast_expression", type: t, operand: sub }, location(), text()); };
-    const peg$c334 = "const_cast";
-    const peg$c335 = peg$literalExpectation("const_cast", false);
-    const peg$c336 = function (t, sub) { return track({ construct_type: "const_cast_expression", type: t, operand: sub }, location(), text()); };
-    const peg$c337 = function (sub, op) { return op; };
-    const peg$c338 = function (sub, ops) { return ops.length > 0 ? track(postfixExp(ops, sub), location(), text()) : sub; };
-    const peg$c339 = function (sub) { return track({ construct_type: "subscript_expression", offset: sub }, location(), text()); };
-    const peg$c340 = function (args) { return track({ construct_type: "function_call_expression", args: args || [] }, location(), text()); };
-    const peg$c341 = ".";
-    const peg$c342 = peg$literalExpectation(".", false);
-    const peg$c343 = function (mem) { return track({ construct_type: "dot_expression", member: mem }, location(), text()); };
-    const peg$c344 = "->";
-    const peg$c345 = peg$literalExpectation("->", false);
-    const peg$c346 = function (mem) { return track({ construct_type: "arrow_expression", member: mem }, location(), text()); };
-    const peg$c347 = function () { return track({ construct_type: "postfix_increment_expression", operator: "++" }, location(), text()); };
-    const peg$c348 = function () { return track({ construct_type: "postfix_increment_expression", operator: "--" }, location(), text()); };
-    const peg$c349 = function (type, args) {
+    const peg$c324 = "static_cast";
+    const peg$c325 = peg$literalExpectation("static_cast", false);
+    const peg$c326 = function (t, sub) { return track({ construct_type: "static_cast_expression", type: t, operand: sub }, location(), text()); };
+    const peg$c327 = "dynamic_cast";
+    const peg$c328 = peg$literalExpectation("dynamic_cast", false);
+    const peg$c329 = function (t, sub) { return track({ construct_type: "dynamic_cast_expression", type: t, operand: sub }, location(), text()); };
+    const peg$c330 = "reinterpret_cast";
+    const peg$c331 = peg$literalExpectation("reinterpret_cast", false);
+    const peg$c332 = function (t, sub) { return track({ construct_type: "reinterpret_cast_expression", type: t, operand: sub }, location(), text()); };
+    const peg$c333 = "const_cast";
+    const peg$c334 = peg$literalExpectation("const_cast", false);
+    const peg$c335 = function (t, sub) { return track({ construct_type: "const_cast_expression", type: t, operand: sub }, location(), text()); };
+    const peg$c336 = function (sub, op) { return op; };
+    const peg$c337 = function (sub, ops) { return ops.length > 0 ? track(postfixExp(ops, sub), location(), text()) : sub; };
+    const peg$c338 = function (sub) { return track({ construct_type: "subscript_expression", offset: sub }, location(), text()); };
+    const peg$c339 = function (args) { return track({ construct_type: "function_call_expression", args: args || [] }, location(), text()); };
+    const peg$c340 = ".";
+    const peg$c341 = peg$literalExpectation(".", false);
+    const peg$c342 = function (mem) { return track({ construct_type: "dot_expression", member: mem }, location(), text()); };
+    const peg$c343 = "->";
+    const peg$c344 = peg$literalExpectation("->", false);
+    const peg$c345 = function (mem) { return track({ construct_type: "arrow_expression", member: mem }, location(), text()); };
+    const peg$c346 = function () { return track({ construct_type: "postfix_increment_expression", operator: "++" }, location(), text()); };
+    const peg$c347 = function () { return track({ construct_type: "postfix_increment_expression", operator: "--" }, location(), text()); };
+    const peg$c348 = function (type, args) {
         return track({ construct_type: "construct_expression", type: type, args: args || [] }, location(), text());
     };
-    const peg$c350 = function (first, e) { return e; };
-    const peg$c351 = function (sub) { return track({ construct_type: "parentheses_expression", subexpression: sub }, location(), text()); };
-    const peg$c352 = "this";
-    const peg$c353 = peg$literalExpectation("this", false);
-    const peg$c354 = function () { return track({ construct_type: "this_expression" }, location(), text()); };
-    const peg$c355 = function (id) { return track({ construct_type: "identifier_expression", identifier: id }, location(), text()); };
-    const peg$c356 = function (n) { return KEYWORDS.has(n.identifier); };
-    const peg$c357 = function (n) { return n; };
-    const peg$c358 = function (n) { return { construct_type: "unqualified_identifier", identifier: "~" + n.identifier }; };
-    const peg$c359 = function (n, u) {
+    const peg$c349 = function (first, e) { return e; };
+    const peg$c350 = function (sub) { return track({ construct_type: "parentheses_expression", subexpression: sub }, location(), text()); };
+    const peg$c351 = "this";
+    const peg$c352 = peg$literalExpectation("this", false);
+    const peg$c353 = function () { return track({ construct_type: "this_expression" }, location(), text()); };
+    const peg$c354 = function (id) { return track({ construct_type: "identifier_expression", identifier: id }, location(), text()); };
+    const peg$c355 = function (n) { return KEYWORDS.has(n.identifier); };
+    const peg$c356 = function (n) { return n; };
+    const peg$c357 = function (n) { return { construct_type: "unqualified_identifier", identifier: "~" + n.identifier }; };
+    const peg$c358 = function (n, u) {
         n.push(u);
         return { construct_type: "qualified_identifier", components: n };
     };
-    const peg$c360 = "::";
-    const peg$c361 = peg$literalExpectation("::", false);
-    const peg$c362 = function (id) { return id; };
-    const peg$c363 = function () { return []; };
-    const peg$c364 = function (id) { return track({ identifier: id }, location(), text()); };
-    const peg$c365 = "operator";
-    const peg$c366 = peg$literalExpectation("operator", false);
-    const peg$c367 = function (op) { return track({ construct_type: "unqualified_identifier", identifier: "operator" + op, operator: op }, location(), text()); };
-    const peg$c368 = "new[]";
-    const peg$c369 = peg$literalExpectation("new[]", false);
-    const peg$c370 = "delete[]";
-    const peg$c371 = peg$literalExpectation("delete[]", false);
-    const peg$c372 = "()";
-    const peg$c373 = peg$literalExpectation("()", false);
-    const peg$c374 = "[]";
-    const peg$c375 = peg$literalExpectation("[]", false);
-    const peg$c376 = "?:";
-    const peg$c377 = peg$literalExpectation("?:", false);
-    const peg$c378 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "float", value: lit }, location(), text()); };
-    const peg$c379 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "int", value: lit }, location(), text()); };
-    const peg$c380 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "char", value: lit }, location(), text()); };
-    const peg$c381 = function (lit) { return track({ construct_type: "string_literal_expression", type: "string", value: lit }, location(), text()); };
-    const peg$c382 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "bool", value: lit }, location(), text()); };
-    const peg$c383 = /^[0-9]/;
-    const peg$c384 = peg$classExpectation([["0", "9"]], false, false);
-    const peg$c385 = function (neg, digits) { return parseInt((neg ? neg : "") + digits.join("")); };
-    const peg$c386 = /^[0-9.]/;
-    const peg$c387 = peg$classExpectation([["0", "9"], "."], false, false);
-    const peg$c388 = function (neg, digits) { return digits.indexOf(".") == digits.lastIndexOf(".") && digits.indexOf(".") != -1; };
-    const peg$c389 = function (neg, digits) { return parseFloat((neg ? neg : "") + digits.join("")); };
-    const peg$c390 = "'";
-    const peg$c391 = peg$literalExpectation("'", false);
-    const peg$c392 = /^[^'\\\n]/;
-    const peg$c393 = peg$classExpectation(["'", "\\", "\n"], true, false);
-    const peg$c394 = function (char) { return char; };
-    const peg$c395 = "\"";
-    const peg$c396 = peg$literalExpectation("\"", false);
-    const peg$c397 = /^[^"\\\n]/;
-    const peg$c398 = peg$classExpectation(["\"", "\\", "\n"], true, false);
-    const peg$c399 = function (chars) { return chars.join(""); };
-    const peg$c400 = "true";
-    const peg$c401 = peg$literalExpectation("true", false);
-    const peg$c402 = function () { return true; };
-    const peg$c403 = "false";
-    const peg$c404 = peg$literalExpectation("false", false);
-    const peg$c405 = function () { return false; };
-    const peg$c406 = "\\\"";
-    const peg$c407 = peg$literalExpectation("\\\"", false);
-    const peg$c408 = "\\'";
-    const peg$c409 = peg$literalExpectation("\\'", false);
-    const peg$c410 = "\\?";
-    const peg$c411 = peg$literalExpectation("\\?", false);
-    const peg$c412 = "\\\\";
-    const peg$c413 = peg$literalExpectation("\\\\", false);
-    const peg$c414 = "\\a";
-    const peg$c415 = peg$literalExpectation("\\a", false);
-    const peg$c416 = "\\b";
-    const peg$c417 = peg$literalExpectation("\\b", false);
-    const peg$c418 = "\\f";
-    const peg$c419 = peg$literalExpectation("\\f", false);
-    const peg$c420 = "\\n";
-    const peg$c421 = peg$literalExpectation("\\n", false);
-    const peg$c422 = "\\r";
-    const peg$c423 = peg$literalExpectation("\\r", false);
-    const peg$c424 = "\\t";
-    const peg$c425 = peg$literalExpectation("\\t", false);
-    const peg$c426 = "\\v";
-    const peg$c427 = peg$literalExpectation("\\v", false);
-    const peg$c428 = "\\0";
-    const peg$c429 = peg$literalExpectation("\\0", false);
-    const peg$c430 = /^[0-8]/;
-    const peg$c431 = peg$classExpectation([["0", "8"]], false, false);
-    const peg$c432 = peg$otherExpectation("identifier");
-    const peg$c433 = function (first, rest) { return track({ construct_type: "unqualified_identifier", identifier: first + rest.join("") }, location(), text()); };
-    const peg$c434 = /^[a-zA-Z0-9_]/;
-    const peg$c435 = peg$classExpectation([["a", "z"], ["A", "Z"], ["0", "9"], "_"], false, false);
-    const peg$c436 = /^[a-zA-Z_]/;
-    const peg$c437 = peg$classExpectation([["a", "z"], ["A", "Z"], "_"], false, false);
-    const peg$c438 = function (id, t) { return { identifier: id.identifier + "<" + t.identifier + ">" }; };
-    const peg$c439 = "@";
-    const peg$c440 = peg$literalExpectation("@", false);
-    const peg$c441 = /^[a-zA-Z_0-9~]/;
-    const peg$c442 = peg$classExpectation([["a", "z"], ["A", "Z"], "_", ["0", "9"], "~"], false, false);
-    const peg$c443 = function (id) { return track({ construct_type: "opaque_expression", id: id.join("") }, location(), text()); };
-    const peg$c444 = peg$otherExpectation("optional whitespace");
-    const peg$c445 = /^[ \t\n\r]/;
-    const peg$c446 = peg$classExpectation([" ", "\t", "\n", "\r"], false, false);
-    const peg$c447 = peg$otherExpectation("whitespace");
-    const peg$c448 = function (id) { return isUserTypeName(id.identifier); };
-    const peg$c449 = function (head) {
+    const peg$c359 = "::";
+    const peg$c360 = peg$literalExpectation("::", false);
+    const peg$c361 = function (id) { return id; };
+    const peg$c362 = function () { return []; };
+    const peg$c363 = function (id) { return track({ identifier: id }, location(), text()); };
+    const peg$c364 = "operator";
+    const peg$c365 = peg$literalExpectation("operator", false);
+    const peg$c366 = function (op) { return track({ construct_type: "unqualified_identifier", identifier: "operator" + op, operator: op }, location(), text()); };
+    const peg$c367 = "new[]";
+    const peg$c368 = peg$literalExpectation("new[]", false);
+    const peg$c369 = "delete[]";
+    const peg$c370 = peg$literalExpectation("delete[]", false);
+    const peg$c371 = "()";
+    const peg$c372 = peg$literalExpectation("()", false);
+    const peg$c373 = "[]";
+    const peg$c374 = peg$literalExpectation("[]", false);
+    const peg$c375 = "?:";
+    const peg$c376 = peg$literalExpectation("?:", false);
+    const peg$c377 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "float", value: lit }, location(), text()); };
+    const peg$c378 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "int", value: lit }, location(), text()); };
+    const peg$c379 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "char", value: lit }, location(), text()); };
+    const peg$c380 = function (lit) { return track({ construct_type: "string_literal_expression", type: "string", value: lit }, location(), text()); };
+    const peg$c381 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "bool", value: lit }, location(), text()); };
+    const peg$c382 = /^[0-9]/;
+    const peg$c383 = peg$classExpectation([["0", "9"]], false, false);
+    const peg$c384 = function (neg, digits) { return parseInt((neg ? neg : "") + digits.join("")); };
+    const peg$c385 = /^[0-9.]/;
+    const peg$c386 = peg$classExpectation([["0", "9"], "."], false, false);
+    const peg$c387 = function (neg, digits) { return digits.indexOf(".") == digits.lastIndexOf(".") && digits.indexOf(".") != -1; };
+    const peg$c388 = function (neg, digits) { return parseFloat((neg ? neg : "") + digits.join("")); };
+    const peg$c389 = "'";
+    const peg$c390 = peg$literalExpectation("'", false);
+    const peg$c391 = /^[^'\\\n]/;
+    const peg$c392 = peg$classExpectation(["'", "\\", "\n"], true, false);
+    const peg$c393 = function (char) { return char; };
+    const peg$c394 = "\"";
+    const peg$c395 = peg$literalExpectation("\"", false);
+    const peg$c396 = /^[^"\\\n]/;
+    const peg$c397 = peg$classExpectation(["\"", "\\", "\n"], true, false);
+    const peg$c398 = function (chars) { return chars.join(""); };
+    const peg$c399 = "true";
+    const peg$c400 = peg$literalExpectation("true", false);
+    const peg$c401 = function () { return true; };
+    const peg$c402 = "false";
+    const peg$c403 = peg$literalExpectation("false", false);
+    const peg$c404 = function () { return false; };
+    const peg$c405 = "\\\"";
+    const peg$c406 = peg$literalExpectation("\\\"", false);
+    const peg$c407 = "\\'";
+    const peg$c408 = peg$literalExpectation("\\'", false);
+    const peg$c409 = "\\?";
+    const peg$c410 = peg$literalExpectation("\\?", false);
+    const peg$c411 = "\\\\";
+    const peg$c412 = peg$literalExpectation("\\\\", false);
+    const peg$c413 = "\\a";
+    const peg$c414 = peg$literalExpectation("\\a", false);
+    const peg$c415 = "\\b";
+    const peg$c416 = peg$literalExpectation("\\b", false);
+    const peg$c417 = "\\f";
+    const peg$c418 = peg$literalExpectation("\\f", false);
+    const peg$c419 = "\\n";
+    const peg$c420 = peg$literalExpectation("\\n", false);
+    const peg$c421 = "\\r";
+    const peg$c422 = peg$literalExpectation("\\r", false);
+    const peg$c423 = "\\t";
+    const peg$c424 = peg$literalExpectation("\\t", false);
+    const peg$c425 = "\\v";
+    const peg$c426 = peg$literalExpectation("\\v", false);
+    const peg$c427 = "\\0";
+    const peg$c428 = peg$literalExpectation("\\0", false);
+    const peg$c429 = /^[0-8]/;
+    const peg$c430 = peg$classExpectation([["0", "8"]], false, false);
+    const peg$c431 = peg$otherExpectation("identifier");
+    const peg$c432 = function (first, rest) { return track({ construct_type: "unqualified_identifier", identifier: first + rest.join("") }, location(), text()); };
+    const peg$c433 = /^[a-zA-Z0-9_]/;
+    const peg$c434 = peg$classExpectation([["a", "z"], ["A", "Z"], ["0", "9"], "_"], false, false);
+    const peg$c435 = /^[a-zA-Z_]/;
+    const peg$c436 = peg$classExpectation([["a", "z"], ["A", "Z"], "_"], false, false);
+    const peg$c437 = function (id, t) { return { identifier: id.identifier + "<" + t.identifier + ">" }; };
+    const peg$c438 = "@";
+    const peg$c439 = peg$literalExpectation("@", false);
+    const peg$c440 = /^[a-zA-Z_0-9~]/;
+    const peg$c441 = peg$classExpectation([["a", "z"], ["A", "Z"], "_", ["0", "9"], "~"], false, false);
+    const peg$c442 = function (id) { return track({ construct_type: "opaque_expression", id: id.join("") }, location(), text()); };
+    const peg$c443 = peg$otherExpectation("optional whitespace");
+    const peg$c444 = /^[ \t\n\r]/;
+    const peg$c445 = peg$classExpectation([" ", "\t", "\n", "\r"], false, false);
+    const peg$c446 = peg$otherExpectation("whitespace");
+    const peg$c447 = function (id) { return isUserTypeName(id.identifier); };
+    const peg$c448 = function (head) {
         classNameStack.push(head.name.identifier);
         getUserTypeNames()[head.name.identifier] = true;
         return true;
     };
-    const peg$c450 = function (head, mems) {
+    const peg$c449 = function (head, mems) {
         classNameStack.pop();
         return track({ construct_type: "class_definition", head: head, memberSpecs: mems }, location(), text());
     };
-    const peg$c451 = function (head) { classNameStack.pop(); return false; };
-    const peg$c452 = function (key, name, b) { return b; };
-    const peg$c453 = function (key, name, bases) { return track({ construct_type: "class_head", classKey: key, name: name, bases: bases !== null && bases !== void 0 ? bases : [] }, location(), text()); };
-    const peg$c454 = "class";
-    const peg$c455 = peg$literalExpectation("class", false);
-    const peg$c456 = "struct";
-    const peg$c457 = peg$literalExpectation("struct", false);
-    const peg$c458 = "union";
-    const peg$c459 = peg$literalExpectation("union", false);
-    const peg$c460 = function (access, m) { return m; };
-    const peg$c461 = function (access, members) { return track({ construct_type: "member_specification", members: members, access: access }, location(), text()); };
-    const peg$c462 = function (m) { return m; };
-    const peg$c463 = function (members) { return track({ construct_type: "member_specification", members: members }, location(), text()); };
-    const peg$c464 = "private";
-    const peg$c465 = peg$literalExpectation("private", false);
-    const peg$c466 = "protected";
-    const peg$c467 = peg$literalExpectation("protected", false);
-    const peg$c468 = "public";
-    const peg$c469 = peg$literalExpectation("public", false);
-    const peg$c470 = function (specs, declarators) {
+    const peg$c450 = function (head) { classNameStack.pop(); return false; };
+    const peg$c451 = function (key, name, b) { return b; };
+    const peg$c452 = function (key, name, bases) { return track({ construct_type: "class_head", classKey: key, name: name, bases: bases !== null && bases !== void 0 ? bases : [] }, location(), text()); };
+    const peg$c453 = "class";
+    const peg$c454 = peg$literalExpectation("class", false);
+    const peg$c455 = "struct";
+    const peg$c456 = peg$literalExpectation("struct", false);
+    const peg$c457 = "union";
+    const peg$c458 = peg$literalExpectation("union", false);
+    const peg$c459 = function (access, m) { return m; };
+    const peg$c460 = function (access, members) { return track({ construct_type: "member_specification", members: members, access: access }, location(), text()); };
+    const peg$c461 = function (m) { return m; };
+    const peg$c462 = function (members) { return track({ construct_type: "member_specification", members: members }, location(), text()); };
+    const peg$c463 = "private";
+    const peg$c464 = peg$literalExpectation("private", false);
+    const peg$c465 = "protected";
+    const peg$c466 = peg$literalExpectation("protected", false);
+    const peg$c467 = "public";
+    const peg$c468 = peg$literalExpectation("public", false);
+    const peg$c469 = function (specs, declarators) {
         return track({ construct_type: "simple_member_declaration", specs: specs, declarators: declarators }, location(), text());
     };
-    const peg$c471 = function (declarators) {
+    const peg$c470 = function (declarators) {
         return track({ construct_type: "simple_member_declaration", specs: emptyDeclSpecs, declarators: declarators }, location(), text());
     };
-    const peg$c472 = function (f) { return f; };
-    const peg$c473 = "0";
-    const peg$c474 = peg$literalExpectation("0", false);
-    const peg$c475 = function (d) { d.pureVirtual = true; return d; };
-    const peg$c476 = function (d) { d.library_unsupported = true; return d; };
-    const peg$c477 = function (d, i) { d.initializer = i; return d; };
-    const peg$c478 = function (d, v) { return v; };
-    const peg$c479 = function (d, v, i) {
+    const peg$c471 = function (f) { return f; };
+    const peg$c472 = "0";
+    const peg$c473 = peg$literalExpectation("0", false);
+    const peg$c474 = function (d) { d.pureVirtual = true; return d; };
+    const peg$c475 = function (d) { d.library_unsupported = true; return d; };
+    const peg$c476 = function (d, i) { d.initializer = i; return d; };
+    const peg$c477 = function (d, v) { return v; };
+    const peg$c478 = function (d, v, i) {
         d[v] = true;
         d.initializer = i;
         return d;
     };
-    const peg$c480 = function (d, v) { d[v] = true; return d; };
-    const peg$c481 = "override";
-    const peg$c482 = peg$literalExpectation("override", false);
-    const peg$c483 = function (b) { return b; };
-    const peg$c484 = function (first, b) { return b; };
-    const peg$c485 = function (a) { return a; };
-    const peg$c486 = function (a, c) {
+    const peg$c479 = function (d, v) { d[v] = true; return d; };
+    const peg$c480 = "override";
+    const peg$c481 = peg$literalExpectation("override", false);
+    const peg$c482 = function (b) { return b; };
+    const peg$c483 = function (first, b) { return b; };
+    const peg$c484 = function (a) { return a; };
+    const peg$c485 = function (a, c) {
         return track({ construct_type: "base_specifier", name: c, virtual: true, access: a }, location(), text());
     };
-    const peg$c487 = function (a, c) {
+    const peg$c486 = function (a, c) {
         return track({ construct_type: "base_specifier", name: c, access: a }, location(), text());
     };
-    const peg$c488 = function (c) {
+    const peg$c487 = function (c) {
         return track({ construct_type: "base_specifier", name: c }, location(), text());
     };
-    const peg$c489 = function (n, c) {
+    const peg$c488 = function (n, c) {
         n.push(c);
         return { construct_type: "qualified_identifier", components: n };
     };
@@ -71361,7 +72267,7 @@ function peg$parse(input, options) {
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c319(s3);
+                            s1 = peg$c176(s3);
                             s0 = s1;
                         }
                         else {
@@ -71425,7 +72331,7 @@ function peg$parse(input, options) {
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c320(s3);
+                            s1 = peg$c319(s3);
                             s0 = s1;
                         }
                         else {
@@ -71457,14 +72363,14 @@ function peg$parse(input, options) {
     function peg$parseexp_delete() {
         let s0, s1, s2, s3, s4, s5, s6, s7;
         s0 = peg$currPos;
-        if (input.substr(peg$currPos, 6) === peg$c321) {
-            s1 = peg$c321;
+        if (input.substr(peg$currPos, 6) === peg$c320) {
+            s1 = peg$c320;
             peg$currPos += 6;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c322);
+                peg$fail(peg$c321);
             }
         }
         if (s1 !== peg$FAILED) {
@@ -71473,7 +72379,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseexp_cast();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c323(s3);
+                    s1 = peg$c322(s3);
                     s0 = s1;
                 }
                 else {
@@ -71492,14 +72398,14 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (input.substr(peg$currPos, 6) === peg$c321) {
-                s1 = peg$c321;
+            if (input.substr(peg$currPos, 6) === peg$c320) {
+                s1 = peg$c320;
                 peg$currPos += 6;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c322);
+                    peg$fail(peg$c321);
                 }
             }
             if (s1 !== peg$FAILED) {
@@ -71534,7 +72440,7 @@ function peg$parse(input, options) {
                                     s7 = peg$parseexp_cast();
                                     if (s7 !== peg$FAILED) {
                                         peg$savedPos = s0;
-                                        s1 = peg$c324(s7);
+                                        s1 = peg$c323(s7);
                                         s0 = s1;
                                     }
                                     else {
@@ -71580,14 +72486,14 @@ function peg$parse(input, options) {
     function peg$parseexp_postfix() {
         let s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13;
         s0 = peg$currPos;
-        if (input.substr(peg$currPos, 11) === peg$c325) {
-            s1 = peg$c325;
+        if (input.substr(peg$currPos, 11) === peg$c324) {
+            s1 = peg$c324;
             peg$currPos += 11;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c326);
+                peg$fail(peg$c325);
             }
         }
         if (s1 !== peg$FAILED) {
@@ -71652,7 +72558,7 @@ function peg$parse(input, options) {
                                                         }
                                                         if (s13 !== peg$FAILED) {
                                                             peg$savedPos = s0;
-                                                            s1 = peg$c327(s5, s11);
+                                                            s1 = peg$c326(s5, s11);
                                                             s0 = s1;
                                                         }
                                                         else {
@@ -71721,14 +72627,14 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (input.substr(peg$currPos, 12) === peg$c328) {
-                s1 = peg$c328;
+            if (input.substr(peg$currPos, 12) === peg$c327) {
+                s1 = peg$c327;
                 peg$currPos += 12;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c329);
+                    peg$fail(peg$c328);
                 }
             }
             if (s1 !== peg$FAILED) {
@@ -71793,7 +72699,7 @@ function peg$parse(input, options) {
                                                             }
                                                             if (s13 !== peg$FAILED) {
                                                                 peg$savedPos = s0;
-                                                                s1 = peg$c330(s5, s11);
+                                                                s1 = peg$c329(s5, s11);
                                                                 s0 = s1;
                                                             }
                                                             else {
@@ -71862,14 +72768,14 @@ function peg$parse(input, options) {
             }
             if (s0 === peg$FAILED) {
                 s0 = peg$currPos;
-                if (input.substr(peg$currPos, 16) === peg$c331) {
-                    s1 = peg$c331;
+                if (input.substr(peg$currPos, 16) === peg$c330) {
+                    s1 = peg$c330;
                     peg$currPos += 16;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c332);
+                        peg$fail(peg$c331);
                     }
                 }
                 if (s1 !== peg$FAILED) {
@@ -71934,7 +72840,7 @@ function peg$parse(input, options) {
                                                                 }
                                                                 if (s13 !== peg$FAILED) {
                                                                     peg$savedPos = s0;
-                                                                    s1 = peg$c333(s5, s11);
+                                                                    s1 = peg$c332(s5, s11);
                                                                     s0 = s1;
                                                                 }
                                                                 else {
@@ -72003,14 +72909,14 @@ function peg$parse(input, options) {
                 }
                 if (s0 === peg$FAILED) {
                     s0 = peg$currPos;
-                    if (input.substr(peg$currPos, 10) === peg$c334) {
-                        s1 = peg$c334;
+                    if (input.substr(peg$currPos, 10) === peg$c333) {
+                        s1 = peg$c333;
                         peg$currPos += 10;
                     }
                     else {
                         s1 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c335);
+                            peg$fail(peg$c334);
                         }
                     }
                     if (s1 !== peg$FAILED) {
@@ -72075,7 +72981,7 @@ function peg$parse(input, options) {
                                                                     }
                                                                     if (s13 !== peg$FAILED) {
                                                                         peg$savedPos = s0;
-                                                                        s1 = peg$c336(s5, s11);
+                                                                        s1 = peg$c335(s5, s11);
                                                                         s0 = s1;
                                                                     }
                                                                     else {
@@ -72156,7 +73062,7 @@ function peg$parse(input, options) {
                                 s5 = peg$parseop_postfix();
                                 if (s5 !== peg$FAILED) {
                                     peg$savedPos = s3;
-                                    s4 = peg$c337(s1, s5);
+                                    s4 = peg$c336(s1, s5);
                                     s3 = s4;
                                 }
                                 else {
@@ -72176,7 +73082,7 @@ function peg$parse(input, options) {
                                     s5 = peg$parseop_postfix();
                                     if (s5 !== peg$FAILED) {
                                         peg$savedPos = s3;
-                                        s4 = peg$c337(s1, s5);
+                                        s4 = peg$c336(s1, s5);
                                         s3 = s4;
                                     }
                                     else {
@@ -72191,7 +73097,7 @@ function peg$parse(input, options) {
                             }
                             if (s2 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c338(s1, s2);
+                                s1 = peg$c337(s1, s2);
                                 s0 = s1;
                             }
                             else {
@@ -72241,7 +73147,7 @@ function peg$parse(input, options) {
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c339(s3);
+                            s1 = peg$c338(s3);
                             s0 = s1;
                         }
                         else {
@@ -72302,7 +73208,7 @@ function peg$parse(input, options) {
                             }
                             if (s5 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c340(s3);
+                                s1 = peg$c339(s3);
                                 s0 = s1;
                             }
                             else {
@@ -72332,13 +73238,13 @@ function peg$parse(input, options) {
             if (s0 === peg$FAILED) {
                 s0 = peg$currPos;
                 if (input.charCodeAt(peg$currPos) === 46) {
-                    s1 = peg$c341;
+                    s1 = peg$c340;
                     peg$currPos++;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c342);
+                        peg$fail(peg$c341);
                     }
                 }
                 if (s1 !== peg$FAILED) {
@@ -72347,7 +73253,7 @@ function peg$parse(input, options) {
                         s3 = peg$parseid_expression();
                         if (s3 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c343(s3);
+                            s1 = peg$c342(s3);
                             s0 = s1;
                         }
                         else {
@@ -72366,14 +73272,14 @@ function peg$parse(input, options) {
                 }
                 if (s0 === peg$FAILED) {
                     s0 = peg$currPos;
-                    if (input.substr(peg$currPos, 2) === peg$c344) {
-                        s1 = peg$c344;
+                    if (input.substr(peg$currPos, 2) === peg$c343) {
+                        s1 = peg$c343;
                         peg$currPos += 2;
                     }
                     else {
                         s1 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c345);
+                            peg$fail(peg$c344);
                         }
                     }
                     if (s1 !== peg$FAILED) {
@@ -72382,7 +73288,7 @@ function peg$parse(input, options) {
                             s3 = peg$parseid_expression();
                             if (s3 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c346(s3);
+                                s1 = peg$c345(s3);
                                 s0 = s1;
                             }
                             else {
@@ -72413,7 +73319,7 @@ function peg$parse(input, options) {
                         }
                         if (s1 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c347();
+                            s1 = peg$c346();
                         }
                         s0 = s1;
                         if (s0 === peg$FAILED) {
@@ -72430,7 +73336,7 @@ function peg$parse(input, options) {
                             }
                             if (s1 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c348();
+                                s1 = peg$c347();
                             }
                             s0 = s1;
                         }
@@ -72479,7 +73385,7 @@ function peg$parse(input, options) {
                                 }
                                 if (s7 !== peg$FAILED) {
                                     peg$savedPos = s0;
-                                    s1 = peg$c349(s1, s5);
+                                    s1 = peg$c348(s1, s5);
                                     s0 = s1;
                                 }
                                 else {
@@ -72543,7 +73449,7 @@ function peg$parse(input, options) {
                         s7 = peg$parseexp_assn();
                         if (s7 !== peg$FAILED) {
                             peg$savedPos = s3;
-                            s4 = peg$c350(s1, s7);
+                            s4 = peg$c349(s1, s7);
                             s3 = s4;
                         }
                         else {
@@ -72586,7 +73492,7 @@ function peg$parse(input, options) {
                             s7 = peg$parseexp_assn();
                             if (s7 !== peg$FAILED) {
                                 peg$savedPos = s3;
-                                s4 = peg$c350(s1, s7);
+                                s4 = peg$c349(s1, s7);
                                 s3 = s4;
                             }
                             else {
@@ -72657,7 +73563,7 @@ function peg$parse(input, options) {
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c351(s3);
+                            s1 = peg$c350(s3);
                             s0 = s1;
                         }
                         else {
@@ -72688,14 +73594,14 @@ function peg$parse(input, options) {
             s0 = peg$parseliteral();
             if (s0 === peg$FAILED) {
                 s0 = peg$currPos;
-                if (input.substr(peg$currPos, 4) === peg$c352) {
-                    s1 = peg$c352;
+                if (input.substr(peg$currPos, 4) === peg$c351) {
+                    s1 = peg$c351;
                     peg$currPos += 4;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c353);
+                        peg$fail(peg$c352);
                     }
                 }
                 if (s1 !== peg$FAILED) {
@@ -72712,7 +73618,7 @@ function peg$parse(input, options) {
                     }
                     if (s2 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c354();
+                        s1 = peg$c353();
                         s0 = s1;
                     }
                     else {
@@ -72729,7 +73635,7 @@ function peg$parse(input, options) {
                     s1 = peg$parseid_expression();
                     if (s1 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c355(s1);
+                        s1 = peg$c354(s1);
                     }
                     s0 = s1;
                     if (s0 === peg$FAILED) {
@@ -72748,7 +73654,7 @@ function peg$parse(input, options) {
             s1 = peg$parseunqualified_id();
             if (s1 !== peg$FAILED) {
                 peg$savedPos = peg$currPos;
-                s2 = peg$c356(s1);
+                s2 = peg$c355(s1);
                 if (s2) {
                     s2 = peg$FAILED;
                 }
@@ -72757,7 +73663,7 @@ function peg$parse(input, options) {
                 }
                 if (s2 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c357(s1);
+                    s1 = peg$c356(s1);
                     s0 = s1;
                 }
                 else {
@@ -72793,7 +73699,7 @@ function peg$parse(input, options) {
                     s3 = peg$parseclass_name();
                     if (s3 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c358(s3);
+                        s1 = peg$c357(s3);
                         s0 = s1;
                     }
                     else {
@@ -72826,7 +73732,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseunqualified_id();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c359(s1, s3);
+                    s1 = peg$c358(s1, s3);
                     s0 = s1;
                 }
                 else {
@@ -72856,21 +73762,21 @@ function peg$parse(input, options) {
         if (s2 !== peg$FAILED) {
             s3 = peg$parsews();
             if (s3 !== peg$FAILED) {
-                if (input.substr(peg$currPos, 2) === peg$c360) {
-                    s4 = peg$c360;
+                if (input.substr(peg$currPos, 2) === peg$c359) {
+                    s4 = peg$c359;
                     peg$currPos += 2;
                 }
                 else {
                     s4 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c361);
+                        peg$fail(peg$c360);
                     }
                 }
                 if (s4 !== peg$FAILED) {
                     s5 = peg$parsews();
                     if (s5 !== peg$FAILED) {
                         peg$savedPos = s1;
-                        s2 = peg$c362(s2);
+                        s2 = peg$c361(s2);
                         s1 = s2;
                     }
                     else {
@@ -72903,21 +73809,21 @@ function peg$parse(input, options) {
                 if (s2 !== peg$FAILED) {
                     s3 = peg$parsews();
                     if (s3 !== peg$FAILED) {
-                        if (input.substr(peg$currPos, 2) === peg$c360) {
-                            s4 = peg$c360;
+                        if (input.substr(peg$currPos, 2) === peg$c359) {
+                            s4 = peg$c359;
                             peg$currPos += 2;
                         }
                         else {
                             s4 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c361);
+                                peg$fail(peg$c360);
                             }
                         }
                         if (s4 !== peg$FAILED) {
                             s5 = peg$parsews();
                             if (s5 !== peg$FAILED) {
                                 peg$savedPos = s1;
-                                s2 = peg$c362(s2);
+                                s2 = peg$c361(s2);
                                 s1 = s2;
                             }
                             else {
@@ -72946,21 +73852,21 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (input.substr(peg$currPos, 2) === peg$c360) {
-                s1 = peg$c360;
+            if (input.substr(peg$currPos, 2) === peg$c359) {
+                s1 = peg$c359;
                 peg$currPos += 2;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c361);
+                    peg$fail(peg$c360);
                 }
             }
             if (s1 !== peg$FAILED) {
                 s2 = peg$parsews();
                 if (s2 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c363();
+                    s1 = peg$c362();
                     s0 = s1;
                 }
                 else {
@@ -72981,7 +73887,7 @@ function peg$parse(input, options) {
         s1 = peg$parsesimple_type_name();
         if (s1 !== peg$FAILED) {
             peg$savedPos = s0;
-            s1 = peg$c364(s1);
+            s1 = peg$c363(s1);
         }
         s0 = s1;
         return s0;
@@ -72997,14 +73903,14 @@ function peg$parse(input, options) {
     function peg$parseoperator_function_id() {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
-        if (input.substr(peg$currPos, 8) === peg$c365) {
-            s1 = peg$c365;
+        if (input.substr(peg$currPos, 8) === peg$c364) {
+            s1 = peg$c364;
             peg$currPos += 8;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c366);
+                peg$fail(peg$c365);
             }
         }
         if (s1 !== peg$FAILED) {
@@ -73013,7 +73919,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseoverloadable_op();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c367(s3);
+                    s1 = peg$c366(s3);
                     s0 = s1;
                 }
                 else {
@@ -73034,25 +73940,25 @@ function peg$parse(input, options) {
     }
     function peg$parseoverloadable_op() {
         let s0;
-        if (input.substr(peg$currPos, 5) === peg$c368) {
-            s0 = peg$c368;
+        if (input.substr(peg$currPos, 5) === peg$c367) {
+            s0 = peg$c367;
             peg$currPos += 5;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c369);
+                peg$fail(peg$c368);
             }
         }
         if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 8) === peg$c370) {
-                s0 = peg$c370;
+            if (input.substr(peg$currPos, 8) === peg$c369) {
+                s0 = peg$c369;
                 peg$currPos += 8;
             }
             else {
                 s0 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c371);
+                    peg$fail(peg$c370);
                 }
             }
             if (s0 === peg$FAILED) {
@@ -73067,14 +73973,14 @@ function peg$parse(input, options) {
                     }
                 }
                 if (s0 === peg$FAILED) {
-                    if (input.substr(peg$currPos, 6) === peg$c321) {
-                        s0 = peg$c321;
+                    if (input.substr(peg$currPos, 6) === peg$c320) {
+                        s0 = peg$c320;
                         peg$currPos += 6;
                     }
                     else {
                         s0 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c322);
+                            peg$fail(peg$c321);
                         }
                     }
                     if (s0 === peg$FAILED) {
@@ -73309,36 +74215,36 @@ function peg$parse(input, options) {
                                                                                                             }
                                                                                                         }
                                                                                                         if (s0 === peg$FAILED) {
-                                                                                                            if (input.substr(peg$currPos, 2) === peg$c344) {
-                                                                                                                s0 = peg$c344;
+                                                                                                            if (input.substr(peg$currPos, 2) === peg$c343) {
+                                                                                                                s0 = peg$c343;
                                                                                                                 peg$currPos += 2;
                                                                                                             }
                                                                                                             else {
                                                                                                                 s0 = peg$FAILED;
                                                                                                                 if (peg$silentFails === 0) {
-                                                                                                                    peg$fail(peg$c345);
+                                                                                                                    peg$fail(peg$c344);
                                                                                                                 }
                                                                                                             }
                                                                                                             if (s0 === peg$FAILED) {
-                                                                                                                if (input.substr(peg$currPos, 2) === peg$c372) {
-                                                                                                                    s0 = peg$c372;
+                                                                                                                if (input.substr(peg$currPos, 2) === peg$c371) {
+                                                                                                                    s0 = peg$c371;
                                                                                                                     peg$currPos += 2;
                                                                                                                 }
                                                                                                                 else {
                                                                                                                     s0 = peg$FAILED;
                                                                                                                     if (peg$silentFails === 0) {
-                                                                                                                        peg$fail(peg$c373);
+                                                                                                                        peg$fail(peg$c372);
                                                                                                                     }
                                                                                                                 }
                                                                                                                 if (s0 === peg$FAILED) {
-                                                                                                                    if (input.substr(peg$currPos, 2) === peg$c374) {
-                                                                                                                        s0 = peg$c374;
+                                                                                                                    if (input.substr(peg$currPos, 2) === peg$c373) {
+                                                                                                                        s0 = peg$c373;
                                                                                                                         peg$currPos += 2;
                                                                                                                     }
                                                                                                                     else {
                                                                                                                         s0 = peg$FAILED;
                                                                                                                         if (peg$silentFails === 0) {
-                                                                                                                            peg$fail(peg$c375);
+                                                                                                                            peg$fail(peg$c374);
                                                                                                                         }
                                                                                                                     }
                                                                                                                     if (s0 === peg$FAILED) {
@@ -73541,13 +74447,13 @@ function peg$parse(input, options) {
     function peg$parseunoverloadable_op() {
         let s0;
         if (input.charCodeAt(peg$currPos) === 46) {
-            s0 = peg$c341;
+            s0 = peg$c340;
             peg$currPos++;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c342);
+                peg$fail(peg$c341);
             }
         }
         if (s0 === peg$FAILED) {
@@ -73562,25 +74468,25 @@ function peg$parse(input, options) {
                 }
             }
             if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 2) === peg$c360) {
-                    s0 = peg$c360;
+                if (input.substr(peg$currPos, 2) === peg$c359) {
+                    s0 = peg$c359;
                     peg$currPos += 2;
                 }
                 else {
                     s0 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c361);
+                        peg$fail(peg$c360);
                     }
                 }
                 if (s0 === peg$FAILED) {
-                    if (input.substr(peg$currPos, 2) === peg$c376) {
-                        s0 = peg$c376;
+                    if (input.substr(peg$currPos, 2) === peg$c375) {
+                        s0 = peg$c375;
                         peg$currPos += 2;
                     }
                     else {
                         s0 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c377);
+                            peg$fail(peg$c376);
                         }
                     }
                 }
@@ -73594,7 +74500,7 @@ function peg$parse(input, options) {
         s1 = peg$parseliteral_float();
         if (s1 !== peg$FAILED) {
             peg$savedPos = s0;
-            s1 = peg$c378(s1);
+            s1 = peg$c377(s1);
         }
         s0 = s1;
         if (s0 === peg$FAILED) {
@@ -73602,7 +74508,7 @@ function peg$parse(input, options) {
             s1 = peg$parseliteral_int();
             if (s1 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c379(s1);
+                s1 = peg$c378(s1);
             }
             s0 = s1;
             if (s0 === peg$FAILED) {
@@ -73610,7 +74516,7 @@ function peg$parse(input, options) {
                 s1 = peg$parseliteral_char();
                 if (s1 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c380(s1);
+                    s1 = peg$c379(s1);
                 }
                 s0 = s1;
                 if (s0 === peg$FAILED) {
@@ -73618,7 +74524,7 @@ function peg$parse(input, options) {
                     s1 = peg$parseliteral_string();
                     if (s1 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c381(s1);
+                        s1 = peg$c380(s1);
                     }
                     s0 = s1;
                     if (s0 === peg$FAILED) {
@@ -73626,7 +74532,7 @@ function peg$parse(input, options) {
                         s1 = peg$parseliteral_boolean();
                         if (s1 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c382(s1);
+                            s1 = peg$c381(s1);
                         }
                         s0 = s1;
                     }
@@ -73653,27 +74559,27 @@ function peg$parse(input, options) {
         }
         if (s1 !== peg$FAILED) {
             s2 = [];
-            if (peg$c383.test(input.charAt(peg$currPos))) {
+            if (peg$c382.test(input.charAt(peg$currPos))) {
                 s3 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s3 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c384);
+                    peg$fail(peg$c383);
                 }
             }
             if (s3 !== peg$FAILED) {
                 while (s3 !== peg$FAILED) {
                     s2.push(s3);
-                    if (peg$c383.test(input.charAt(peg$currPos))) {
+                    if (peg$c382.test(input.charAt(peg$currPos))) {
                         s3 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s3 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c384);
+                            peg$fail(peg$c383);
                         }
                     }
                 }
@@ -73683,7 +74589,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c385(s1, s2);
+                s1 = peg$c384(s1, s2);
                 s0 = s1;
             }
             else {
@@ -73715,27 +74621,27 @@ function peg$parse(input, options) {
         }
         if (s1 !== peg$FAILED) {
             s2 = [];
-            if (peg$c386.test(input.charAt(peg$currPos))) {
+            if (peg$c385.test(input.charAt(peg$currPos))) {
                 s3 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s3 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c387);
+                    peg$fail(peg$c386);
                 }
             }
             if (s3 !== peg$FAILED) {
                 while (s3 !== peg$FAILED) {
                     s2.push(s3);
-                    if (peg$c386.test(input.charAt(peg$currPos))) {
+                    if (peg$c385.test(input.charAt(peg$currPos))) {
                         s3 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s3 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c387);
+                            peg$fail(peg$c386);
                         }
                     }
                 }
@@ -73745,7 +74651,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = peg$currPos;
-                s3 = peg$c388(s1, s2);
+                s3 = peg$c387(s1, s2);
                 if (s3) {
                     s3 = undefined;
                 }
@@ -73754,7 +74660,7 @@ function peg$parse(input, options) {
                 }
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c389(s1, s2);
+                    s1 = peg$c388(s1, s2);
                     s0 = s1;
                 }
                 else {
@@ -73777,24 +74683,24 @@ function peg$parse(input, options) {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
         if (input.charCodeAt(peg$currPos) === 39) {
-            s1 = peg$c390;
+            s1 = peg$c389;
             peg$currPos++;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c391);
+                peg$fail(peg$c390);
             }
         }
         if (s1 !== peg$FAILED) {
-            if (peg$c392.test(input.charAt(peg$currPos))) {
+            if (peg$c391.test(input.charAt(peg$currPos))) {
                 s2 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s2 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c393);
+                    peg$fail(peg$c392);
                 }
             }
             if (s2 === peg$FAILED) {
@@ -73802,18 +74708,18 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 if (input.charCodeAt(peg$currPos) === 39) {
-                    s3 = peg$c390;
+                    s3 = peg$c389;
                     peg$currPos++;
                 }
                 else {
                     s3 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c391);
+                        peg$fail(peg$c390);
                     }
                 }
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c394(s2);
+                    s1 = peg$c393(s2);
                     s0 = s1;
                 }
                 else {
@@ -73836,25 +74742,25 @@ function peg$parse(input, options) {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
         if (input.charCodeAt(peg$currPos) === 34) {
-            s1 = peg$c395;
+            s1 = peg$c394;
             peg$currPos++;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c396);
+                peg$fail(peg$c395);
             }
         }
         if (s1 !== peg$FAILED) {
             s2 = [];
-            if (peg$c397.test(input.charAt(peg$currPos))) {
+            if (peg$c396.test(input.charAt(peg$currPos))) {
                 s3 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s3 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c398);
+                    peg$fail(peg$c397);
                 }
             }
             if (s3 === peg$FAILED) {
@@ -73862,14 +74768,14 @@ function peg$parse(input, options) {
             }
             while (s3 !== peg$FAILED) {
                 s2.push(s3);
-                if (peg$c397.test(input.charAt(peg$currPos))) {
+                if (peg$c396.test(input.charAt(peg$currPos))) {
                     s3 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s3 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c398);
+                        peg$fail(peg$c397);
                     }
                 }
                 if (s3 === peg$FAILED) {
@@ -73878,18 +74784,18 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 if (input.charCodeAt(peg$currPos) === 34) {
-                    s3 = peg$c395;
+                    s3 = peg$c394;
                     peg$currPos++;
                 }
                 else {
                     s3 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c396);
+                        peg$fail(peg$c395);
                     }
                 }
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c399(s2);
+                    s1 = peg$c398(s2);
                     s0 = s1;
                 }
                 else {
@@ -73911,14 +74817,14 @@ function peg$parse(input, options) {
     function peg$parseliteral_boolean() {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
-        if (input.substr(peg$currPos, 4) === peg$c400) {
-            s1 = peg$c400;
+        if (input.substr(peg$currPos, 4) === peg$c399) {
+            s1 = peg$c399;
             peg$currPos += 4;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c401);
+                peg$fail(peg$c400);
             }
         }
         if (s1 !== peg$FAILED) {
@@ -73935,7 +74841,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c402();
+                s1 = peg$c401();
                 s0 = s1;
             }
             else {
@@ -73949,14 +74855,14 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (input.substr(peg$currPos, 5) === peg$c403) {
-                s1 = peg$c403;
+            if (input.substr(peg$currPos, 5) === peg$c402) {
+                s1 = peg$c402;
                 peg$currPos += 5;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c404);
+                    peg$fail(peg$c403);
                 }
             }
             if (s1 !== peg$FAILED) {
@@ -73973,7 +74879,7 @@ function peg$parse(input, options) {
                 }
                 if (s2 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c405();
+                    s1 = peg$c404();
                     s0 = s1;
                 }
                 else {
@@ -73998,135 +74904,135 @@ function peg$parse(input, options) {
     }
     function peg$parsesimple_escape() {
         let s0;
-        if (input.substr(peg$currPos, 2) === peg$c406) {
-            s0 = peg$c406;
+        if (input.substr(peg$currPos, 2) === peg$c405) {
+            s0 = peg$c405;
             peg$currPos += 2;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c407);
+                peg$fail(peg$c406);
             }
         }
         if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 2) === peg$c408) {
-                s0 = peg$c408;
+            if (input.substr(peg$currPos, 2) === peg$c407) {
+                s0 = peg$c407;
                 peg$currPos += 2;
             }
             else {
                 s0 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c409);
+                    peg$fail(peg$c408);
                 }
             }
             if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 2) === peg$c410) {
-                    s0 = peg$c410;
+                if (input.substr(peg$currPos, 2) === peg$c409) {
+                    s0 = peg$c409;
                     peg$currPos += 2;
                 }
                 else {
                     s0 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c411);
+                        peg$fail(peg$c410);
                     }
                 }
                 if (s0 === peg$FAILED) {
-                    if (input.substr(peg$currPos, 2) === peg$c412) {
-                        s0 = peg$c412;
+                    if (input.substr(peg$currPos, 2) === peg$c411) {
+                        s0 = peg$c411;
                         peg$currPos += 2;
                     }
                     else {
                         s0 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c413);
+                            peg$fail(peg$c412);
                         }
                     }
                     if (s0 === peg$FAILED) {
-                        if (input.substr(peg$currPos, 2) === peg$c414) {
-                            s0 = peg$c414;
+                        if (input.substr(peg$currPos, 2) === peg$c413) {
+                            s0 = peg$c413;
                             peg$currPos += 2;
                         }
                         else {
                             s0 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c415);
+                                peg$fail(peg$c414);
                             }
                         }
                         if (s0 === peg$FAILED) {
-                            if (input.substr(peg$currPos, 2) === peg$c416) {
-                                s0 = peg$c416;
+                            if (input.substr(peg$currPos, 2) === peg$c415) {
+                                s0 = peg$c415;
                                 peg$currPos += 2;
                             }
                             else {
                                 s0 = peg$FAILED;
                                 if (peg$silentFails === 0) {
-                                    peg$fail(peg$c417);
+                                    peg$fail(peg$c416);
                                 }
                             }
                             if (s0 === peg$FAILED) {
-                                if (input.substr(peg$currPos, 2) === peg$c418) {
-                                    s0 = peg$c418;
+                                if (input.substr(peg$currPos, 2) === peg$c417) {
+                                    s0 = peg$c417;
                                     peg$currPos += 2;
                                 }
                                 else {
                                     s0 = peg$FAILED;
                                     if (peg$silentFails === 0) {
-                                        peg$fail(peg$c419);
+                                        peg$fail(peg$c418);
                                     }
                                 }
                                 if (s0 === peg$FAILED) {
-                                    if (input.substr(peg$currPos, 2) === peg$c420) {
-                                        s0 = peg$c420;
+                                    if (input.substr(peg$currPos, 2) === peg$c419) {
+                                        s0 = peg$c419;
                                         peg$currPos += 2;
                                     }
                                     else {
                                         s0 = peg$FAILED;
                                         if (peg$silentFails === 0) {
-                                            peg$fail(peg$c421);
+                                            peg$fail(peg$c420);
                                         }
                                     }
                                     if (s0 === peg$FAILED) {
-                                        if (input.substr(peg$currPos, 2) === peg$c422) {
-                                            s0 = peg$c422;
+                                        if (input.substr(peg$currPos, 2) === peg$c421) {
+                                            s0 = peg$c421;
                                             peg$currPos += 2;
                                         }
                                         else {
                                             s0 = peg$FAILED;
                                             if (peg$silentFails === 0) {
-                                                peg$fail(peg$c423);
+                                                peg$fail(peg$c422);
                                             }
                                         }
                                         if (s0 === peg$FAILED) {
-                                            if (input.substr(peg$currPos, 2) === peg$c424) {
-                                                s0 = peg$c424;
+                                            if (input.substr(peg$currPos, 2) === peg$c423) {
+                                                s0 = peg$c423;
                                                 peg$currPos += 2;
                                             }
                                             else {
                                                 s0 = peg$FAILED;
                                                 if (peg$silentFails === 0) {
-                                                    peg$fail(peg$c425);
+                                                    peg$fail(peg$c424);
                                                 }
                                             }
                                             if (s0 === peg$FAILED) {
-                                                if (input.substr(peg$currPos, 2) === peg$c426) {
-                                                    s0 = peg$c426;
+                                                if (input.substr(peg$currPos, 2) === peg$c425) {
+                                                    s0 = peg$c425;
                                                     peg$currPos += 2;
                                                 }
                                                 else {
                                                     s0 = peg$FAILED;
                                                     if (peg$silentFails === 0) {
-                                                        peg$fail(peg$c427);
+                                                        peg$fail(peg$c426);
                                                     }
                                                 }
                                                 if (s0 === peg$FAILED) {
-                                                    if (input.substr(peg$currPos, 2) === peg$c428) {
-                                                        s0 = peg$c428;
+                                                    if (input.substr(peg$currPos, 2) === peg$c427) {
+                                                        s0 = peg$c427;
                                                         peg$currPos += 2;
                                                     }
                                                     else {
                                                         s0 = peg$FAILED;
                                                         if (peg$silentFails === 0) {
-                                                            peg$fail(peg$c429);
+                                                            peg$fail(peg$c428);
                                                         }
                                                     }
                                                 }
@@ -74144,37 +75050,37 @@ function peg$parse(input, options) {
     }
     function peg$parseoctal_escape() {
         let s0, s1, s2, s3;
-        if (peg$c430.test(input.charAt(peg$currPos))) {
+        if (peg$c429.test(input.charAt(peg$currPos))) {
             s0 = input.charAt(peg$currPos);
             peg$currPos++;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c431);
+                peg$fail(peg$c430);
             }
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (peg$c430.test(input.charAt(peg$currPos))) {
+            if (peg$c429.test(input.charAt(peg$currPos))) {
                 s1 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c431);
+                    peg$fail(peg$c430);
                 }
             }
             if (s1 !== peg$FAILED) {
-                if (peg$c430.test(input.charAt(peg$currPos))) {
+                if (peg$c429.test(input.charAt(peg$currPos))) {
                     s2 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s2 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c431);
+                        peg$fail(peg$c430);
                     }
                 }
                 if (s2 !== peg$FAILED) {
@@ -74192,36 +75098,36 @@ function peg$parse(input, options) {
             }
             if (s0 === peg$FAILED) {
                 s0 = peg$currPos;
-                if (peg$c430.test(input.charAt(peg$currPos))) {
+                if (peg$c429.test(input.charAt(peg$currPos))) {
                     s1 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c431);
+                        peg$fail(peg$c430);
                     }
                 }
                 if (s1 !== peg$FAILED) {
-                    if (peg$c430.test(input.charAt(peg$currPos))) {
+                    if (peg$c429.test(input.charAt(peg$currPos))) {
                         s2 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s2 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c431);
+                            peg$fail(peg$c430);
                         }
                     }
                     if (s2 !== peg$FAILED) {
-                        if (peg$c430.test(input.charAt(peg$currPos))) {
+                        if (peg$c429.test(input.charAt(peg$currPos))) {
                             s3 = input.charAt(peg$currPos);
                             peg$currPos++;
                         }
                         else {
                             s3 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c431);
+                                peg$fail(peg$c430);
                             }
                         }
                         if (s3 !== peg$FAILED) {
@@ -74260,7 +75166,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c433(s1, s2);
+                s1 = peg$c432(s1, s2);
                 s0 = s1;
             }
             else {
@@ -74276,35 +75182,35 @@ function peg$parse(input, options) {
         if (s0 === peg$FAILED) {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c432);
+                peg$fail(peg$c431);
             }
         }
         return s0;
     }
     function peg$parseidentifierChar() {
         let s0;
-        if (peg$c434.test(input.charAt(peg$currPos))) {
+        if (peg$c433.test(input.charAt(peg$currPos))) {
             s0 = input.charAt(peg$currPos);
             peg$currPos++;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c435);
+                peg$fail(peg$c434);
             }
         }
         return s0;
     }
     function peg$parseidentifierFirstChar() {
         let s0;
-        if (peg$c436.test(input.charAt(peg$currPos))) {
+        if (peg$c435.test(input.charAt(peg$currPos))) {
             s0 = input.charAt(peg$currPos);
             peg$currPos++;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c437);
+                peg$fail(peg$c436);
             }
         }
         return s0;
@@ -74339,7 +75245,7 @@ function peg$parse(input, options) {
                     }
                     if (s4 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c438(s1, s3);
+                        s1 = peg$c437(s1, s3);
                         s0 = s1;
                     }
                     else {
@@ -74367,36 +75273,36 @@ function peg$parse(input, options) {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
         if (input.charCodeAt(peg$currPos) === 64) {
-            s1 = peg$c439;
+            s1 = peg$c438;
             peg$currPos++;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c440);
+                peg$fail(peg$c439);
             }
         }
         if (s1 !== peg$FAILED) {
             s2 = [];
-            if (peg$c441.test(input.charAt(peg$currPos))) {
+            if (peg$c440.test(input.charAt(peg$currPos))) {
                 s3 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s3 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c442);
+                    peg$fail(peg$c441);
                 }
             }
             if (s3 === peg$FAILED) {
-                if (input.substr(peg$currPos, 2) === peg$c360) {
-                    s3 = peg$c360;
+                if (input.substr(peg$currPos, 2) === peg$c359) {
+                    s3 = peg$c359;
                     peg$currPos += 2;
                 }
                 else {
                     s3 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c361);
+                        peg$fail(peg$c360);
                     }
                 }
                 if (s3 === peg$FAILED) {
@@ -74406,25 +75312,25 @@ function peg$parse(input, options) {
             if (s3 !== peg$FAILED) {
                 while (s3 !== peg$FAILED) {
                     s2.push(s3);
-                    if (peg$c441.test(input.charAt(peg$currPos))) {
+                    if (peg$c440.test(input.charAt(peg$currPos))) {
                         s3 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s3 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c442);
+                            peg$fail(peg$c441);
                         }
                     }
                     if (s3 === peg$FAILED) {
-                        if (input.substr(peg$currPos, 2) === peg$c360) {
-                            s3 = peg$c360;
+                        if (input.substr(peg$currPos, 2) === peg$c359) {
+                            s3 = peg$c359;
                             peg$currPos += 2;
                         }
                         else {
                             s3 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c361);
+                                peg$fail(peg$c360);
                             }
                         }
                         if (s3 === peg$FAILED) {
@@ -74438,7 +75344,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c443(s2);
+                s1 = peg$c442(s2);
                 s0 = s1;
             }
             else {
@@ -74457,26 +75363,26 @@ function peg$parse(input, options) {
         peg$silentFails++;
         s0 = peg$currPos;
         s1 = [];
-        if (peg$c445.test(input.charAt(peg$currPos))) {
+        if (peg$c444.test(input.charAt(peg$currPos))) {
             s2 = input.charAt(peg$currPos);
             peg$currPos++;
         }
         else {
             s2 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c446);
+                peg$fail(peg$c445);
             }
         }
         while (s2 !== peg$FAILED) {
             s1.push(s2);
-            if (peg$c445.test(input.charAt(peg$currPos))) {
+            if (peg$c444.test(input.charAt(peg$currPos))) {
                 s2 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s2 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c446);
+                    peg$fail(peg$c445);
                 }
             }
         }
@@ -74504,26 +75410,26 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = [];
-            if (peg$c445.test(input.charAt(peg$currPos))) {
+            if (peg$c444.test(input.charAt(peg$currPos))) {
                 s1 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c446);
+                    peg$fail(peg$c445);
                 }
             }
             while (s1 !== peg$FAILED) {
                 s0.push(s1);
-                if (peg$c445.test(input.charAt(peg$currPos))) {
+                if (peg$c444.test(input.charAt(peg$currPos))) {
                     s1 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c446);
+                        peg$fail(peg$c445);
                     }
                 }
             }
@@ -74532,7 +75438,7 @@ function peg$parse(input, options) {
         if (s0 === peg$FAILED) {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c444);
+                peg$fail(peg$c443);
             }
         }
         return s0;
@@ -74560,27 +75466,27 @@ function peg$parse(input, options) {
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
             s1 = [];
-            if (peg$c445.test(input.charAt(peg$currPos))) {
+            if (peg$c444.test(input.charAt(peg$currPos))) {
                 s2 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s2 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c446);
+                    peg$fail(peg$c445);
                 }
             }
             if (s2 !== peg$FAILED) {
                 while (s2 !== peg$FAILED) {
                     s1.push(s2);
-                    if (peg$c445.test(input.charAt(peg$currPos))) {
+                    if (peg$c444.test(input.charAt(peg$currPos))) {
                         s2 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s2 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c446);
+                            peg$fail(peg$c445);
                         }
                     }
                 }
@@ -74612,27 +75518,27 @@ function peg$parse(input, options) {
             }
             if (s0 === peg$FAILED) {
                 s0 = [];
-                if (peg$c445.test(input.charAt(peg$currPos))) {
+                if (peg$c444.test(input.charAt(peg$currPos))) {
                     s1 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c446);
+                        peg$fail(peg$c445);
                     }
                 }
                 if (s1 !== peg$FAILED) {
                     while (s1 !== peg$FAILED) {
                         s0.push(s1);
-                        if (peg$c445.test(input.charAt(peg$currPos))) {
+                        if (peg$c444.test(input.charAt(peg$currPos))) {
                             s1 = input.charAt(peg$currPos);
                             peg$currPos++;
                         }
                         else {
                             s1 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c446);
+                                peg$fail(peg$c445);
                             }
                         }
                     }
@@ -74646,7 +75552,7 @@ function peg$parse(input, options) {
         if (s0 === peg$FAILED) {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c447);
+                peg$fail(peg$c446);
             }
         }
         return s0;
@@ -74657,7 +75563,7 @@ function peg$parse(input, options) {
         s1 = peg$parsetemplate_identifier();
         if (s1 !== peg$FAILED) {
             peg$savedPos = peg$currPos;
-            s2 = peg$c448(s1);
+            s2 = peg$c447(s1);
             if (s2) {
                 s2 = undefined;
             }
@@ -74666,7 +75572,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c362(s1);
+                s1 = peg$c361(s1);
                 s0 = s1;
             }
             else {
@@ -74683,7 +75589,7 @@ function peg$parse(input, options) {
             s1 = peg$parseidentifier();
             if (s1 !== peg$FAILED) {
                 peg$savedPos = peg$currPos;
-                s2 = peg$c448(s1);
+                s2 = peg$c447(s1);
                 if (s2) {
                     s2 = undefined;
                 }
@@ -74692,7 +75598,7 @@ function peg$parse(input, options) {
                 }
                 if (s2 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c362(s1);
+                    s1 = peg$c361(s1);
                     s0 = s1;
                 }
                 else {
@@ -74713,7 +75619,7 @@ function peg$parse(input, options) {
         s1 = peg$parseclass_head();
         if (s1 !== peg$FAILED) {
             peg$savedPos = peg$currPos;
-            s2 = peg$c449(s1);
+            s2 = peg$c448(s1);
             if (s2) {
                 s2 = undefined;
             }
@@ -74757,7 +75663,7 @@ function peg$parse(input, options) {
                                     }
                                     if (s8 !== peg$FAILED) {
                                         peg$savedPos = s0;
-                                        s1 = peg$c450(s1, s6);
+                                        s1 = peg$c449(s1, s6);
                                         s0 = s1;
                                     }
                                     else {
@@ -74804,7 +75710,7 @@ function peg$parse(input, options) {
             s1 = peg$parseclass_head();
             if (s1 !== peg$FAILED) {
                 peg$savedPos = peg$currPos;
-                s2 = peg$c451(s1);
+                s2 = peg$c450(s1);
                 if (s2) {
                     s2 = undefined;
                 }
@@ -74842,7 +75748,7 @@ function peg$parse(input, options) {
                         s6 = peg$parsebase_clause();
                         if (s6 !== peg$FAILED) {
                             peg$savedPos = s4;
-                            s5 = peg$c452(s1, s3, s6);
+                            s5 = peg$c451(s1, s3, s6);
                             s4 = s5;
                         }
                         else {
@@ -74859,7 +75765,7 @@ function peg$parse(input, options) {
                     }
                     if (s4 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c453(s1, s3, s4);
+                        s1 = peg$c452(s1, s3, s4);
                         s0 = s1;
                     }
                     else {
@@ -74893,36 +75799,36 @@ function peg$parse(input, options) {
     }
     function peg$parseclass_key() {
         let s0;
-        if (input.substr(peg$currPos, 5) === peg$c454) {
-            s0 = peg$c454;
+        if (input.substr(peg$currPos, 5) === peg$c453) {
+            s0 = peg$c453;
             peg$currPos += 5;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c455);
+                peg$fail(peg$c454);
             }
         }
         if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 6) === peg$c456) {
-                s0 = peg$c456;
+            if (input.substr(peg$currPos, 6) === peg$c455) {
+                s0 = peg$c455;
                 peg$currPos += 6;
             }
             else {
                 s0 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c457);
+                    peg$fail(peg$c456);
                 }
             }
             if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 5) === peg$c458) {
-                    s0 = peg$c458;
+                if (input.substr(peg$currPos, 5) === peg$c457) {
+                    s0 = peg$c457;
                     peg$currPos += 5;
                 }
                 else {
                     s0 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c459);
+                        peg$fail(peg$c458);
                     }
                 }
             }
@@ -74956,7 +75862,7 @@ function peg$parse(input, options) {
                             s8 = peg$parsews();
                             if (s8 !== peg$FAILED) {
                                 peg$savedPos = s6;
-                                s7 = peg$c460(s1, s7);
+                                s7 = peg$c459(s1, s7);
                                 s6 = s7;
                             }
                             else {
@@ -74976,7 +75882,7 @@ function peg$parse(input, options) {
                                 s8 = peg$parsews();
                                 if (s8 !== peg$FAILED) {
                                     peg$savedPos = s6;
-                                    s7 = peg$c460(s1, s7);
+                                    s7 = peg$c459(s1, s7);
                                     s6 = s7;
                                 }
                                 else {
@@ -74991,7 +75897,7 @@ function peg$parse(input, options) {
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c461(s1, s5);
+                            s1 = peg$c460(s1, s5);
                             s0 = s1;
                         }
                         else {
@@ -75027,7 +75933,7 @@ function peg$parse(input, options) {
                 s4 = peg$parsews();
                 if (s4 !== peg$FAILED) {
                     peg$savedPos = s2;
-                    s3 = peg$c462(s3);
+                    s3 = peg$c461(s3);
                     s2 = s3;
                 }
                 else {
@@ -75048,7 +75954,7 @@ function peg$parse(input, options) {
                         s4 = peg$parsews();
                         if (s4 !== peg$FAILED) {
                             peg$savedPos = s2;
-                            s3 = peg$c462(s3);
+                            s3 = peg$c461(s3);
                             s2 = s3;
                         }
                         else {
@@ -75067,7 +75973,7 @@ function peg$parse(input, options) {
             }
             if (s1 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c463(s1);
+                s1 = peg$c462(s1);
             }
             s0 = s1;
         }
@@ -75075,36 +75981,36 @@ function peg$parse(input, options) {
     }
     function peg$parseaccess_specifier() {
         let s0;
-        if (input.substr(peg$currPos, 7) === peg$c464) {
-            s0 = peg$c464;
+        if (input.substr(peg$currPos, 7) === peg$c463) {
+            s0 = peg$c463;
             peg$currPos += 7;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c465);
+                peg$fail(peg$c464);
             }
         }
         if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 9) === peg$c466) {
-                s0 = peg$c466;
+            if (input.substr(peg$currPos, 9) === peg$c465) {
+                s0 = peg$c465;
                 peg$currPos += 9;
             }
             else {
                 s0 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c467);
+                    peg$fail(peg$c466);
                 }
             }
             if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 6) === peg$c468) {
-                    s0 = peg$c468;
+                if (input.substr(peg$currPos, 6) === peg$c467) {
+                    s0 = peg$c467;
                     peg$currPos += 6;
                 }
                 else {
                     s0 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c469);
+                        peg$fail(peg$c468);
                     }
                 }
             }
@@ -75146,7 +76052,7 @@ function peg$parse(input, options) {
                             }
                             if (s6 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c470(s1, s4);
+                                s1 = peg$c469(s1, s4);
                                 s0 = s1;
                             }
                             else {
@@ -75198,7 +76104,7 @@ function peg$parse(input, options) {
                         }
                         if (s4 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c471(s2);
+                            s1 = peg$c470(s2);
                             s0 = s1;
                         }
                         else {
@@ -75263,7 +76169,7 @@ function peg$parse(input, options) {
                                         }
                                         if (s7 !== peg$FAILED) {
                                             peg$savedPos = s0;
-                                            s1 = peg$c470(s1, s5);
+                                            s1 = peg$c469(s1, s5);
                                             s0 = s1;
                                         }
                                         else {
@@ -75321,7 +76227,7 @@ function peg$parse(input, options) {
                             }
                             if (s3 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c472(s1);
+                                s1 = peg$c471(s1);
                                 s0 = s1;
                             }
                             else {
@@ -75471,18 +76377,18 @@ function peg$parse(input, options) {
                     s4 = peg$parsews();
                     if (s4 !== peg$FAILED) {
                         if (input.charCodeAt(peg$currPos) === 48) {
-                            s5 = peg$c473;
+                            s5 = peg$c472;
                             peg$currPos++;
                         }
                         else {
                             s5 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c474);
+                                peg$fail(peg$c473);
                             }
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c475(s1);
+                            s1 = peg$c474(s1);
                             s0 = s1;
                         }
                         else {
@@ -75540,7 +76446,7 @@ function peg$parse(input, options) {
                             }
                             if (s5 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c476(s1);
+                                s1 = peg$c475(s1);
                                 s0 = s1;
                             }
                             else {
@@ -75576,7 +76482,7 @@ function peg$parse(input, options) {
                         s3 = peg$parsebrace_or_equal_initializer();
                         if (s3 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c477(s1, s3);
+                            s1 = peg$c476(s1, s3);
                             s0 = s1;
                         }
                         else {
@@ -75605,7 +76511,7 @@ function peg$parse(input, options) {
                                 s5 = peg$parsews();
                                 if (s5 !== peg$FAILED) {
                                     peg$savedPos = s3;
-                                    s4 = peg$c478(s1, s4);
+                                    s4 = peg$c477(s1, s4);
                                     s3 = s4;
                                 }
                                 else {
@@ -75621,7 +76527,7 @@ function peg$parse(input, options) {
                                 s4 = peg$parsebrace_or_equal_initializer();
                                 if (s4 !== peg$FAILED) {
                                     peg$savedPos = s0;
-                                    s1 = peg$c479(s1, s3, s4);
+                                    s1 = peg$c478(s1, s3, s4);
                                     s0 = s1;
                                 }
                                 else {
@@ -75652,7 +76558,7 @@ function peg$parse(input, options) {
                                 s3 = peg$parsevirt_specifier();
                                 if (s3 !== peg$FAILED) {
                                     peg$savedPos = s0;
-                                    s1 = peg$c480(s1, s3);
+                                    s1 = peg$c479(s1, s3);
                                     s0 = s1;
                                 }
                                 else {
@@ -75680,14 +76586,14 @@ function peg$parse(input, options) {
     }
     function peg$parsevirt_specifier() {
         let s0;
-        if (input.substr(peg$currPos, 8) === peg$c481) {
-            s0 = peg$c481;
+        if (input.substr(peg$currPos, 8) === peg$c480) {
+            s0 = peg$c480;
             peg$currPos += 8;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c482);
+                peg$fail(peg$c481);
             }
         }
         return s0;
@@ -75711,7 +76617,7 @@ function peg$parse(input, options) {
                 s3 = peg$parsebase_specifier_list();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c483(s3);
+                    s1 = peg$c482(s3);
                     s0 = s1;
                 }
                 else {
@@ -75755,7 +76661,7 @@ function peg$parse(input, options) {
                         s7 = peg$parsebase_specifier();
                         if (s7 !== peg$FAILED) {
                             peg$savedPos = s3;
-                            s4 = peg$c484(s1, s7);
+                            s4 = peg$c483(s1, s7);
                             s3 = s4;
                         }
                         else {
@@ -75798,7 +76704,7 @@ function peg$parse(input, options) {
                             s7 = peg$parsebase_specifier();
                             if (s7 !== peg$FAILED) {
                                 peg$savedPos = s3;
-                                s4 = peg$c484(s1, s7);
+                                s4 = peg$c483(s1, s7);
                                 s3 = s4;
                             }
                             else {
@@ -75859,7 +76765,7 @@ function peg$parse(input, options) {
                     s5 = peg$parseWS();
                     if (s5 !== peg$FAILED) {
                         peg$savedPos = s3;
-                        s4 = peg$c485(s4);
+                        s4 = peg$c484(s4);
                         s3 = s4;
                     }
                     else {
@@ -75875,7 +76781,7 @@ function peg$parse(input, options) {
                     s4 = peg$parsequalified_class_name();
                     if (s4 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c486(s3, s4);
+                        s1 = peg$c485(s3, s4);
                         s0 = s1;
                     }
                     else {
@@ -75905,7 +76811,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseWS();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s1;
-                    s2 = peg$c485(s2);
+                    s2 = peg$c484(s2);
                     s1 = s2;
                 }
                 else {
@@ -75934,7 +76840,7 @@ function peg$parse(input, options) {
                         s4 = peg$parsequalified_class_name();
                         if (s4 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c486(s1, s4);
+                            s1 = peg$c485(s1, s4);
                             s0 = s1;
                         }
                         else {
@@ -75965,7 +76871,7 @@ function peg$parse(input, options) {
                         s3 = peg$parsequalified_class_name();
                         if (s3 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c487(s1, s3);
+                            s1 = peg$c486(s1, s3);
                             s0 = s1;
                         }
                         else {
@@ -75987,7 +76893,7 @@ function peg$parse(input, options) {
                     s1 = peg$parsequalified_class_name();
                     if (s1 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c488(s1);
+                        s1 = peg$c487(s1);
                     }
                     s0 = s1;
                 }
@@ -76005,7 +76911,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseclass_name();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c489(s1, s3);
+                    s1 = peg$c488(s1, s3);
                     s0 = s1;
                 }
                 else {
@@ -76830,8 +77736,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.DeleteExpressionOutlet = exports.NewExpressionOutlet = exports.UnaryOperatorExpressionOutlet = exports.InputOperatorExpressionOutlet = exports.OutputOperatorExpressionOutlet = exports.BinaryOperatorExpressionOutlet = exports.MemberOperatorOverloadExpressionOutlet = exports.NonMemberOperatorOverloadExpressionOutlet = exports.MagicFunctionCallExpressionOutlet = exports.ArgumentInitializerOutlet = exports.FunctionCallOutlet = exports.FunctionCallExpressionOutlet = exports.CommaExpressionOutlet = exports.TernaryExpressionOutlet = exports.CompoundAssignmentExpressionOutlet = exports.AssignmentExpressionOutlet = exports.ExpressionOutlet = exports.ArrayMemberInitializerOutlet = exports.ArrayAggregateInitializerOutlet = exports.ClassCopyInitializerOutlet = exports.ReferenceCopyInitializerOutlet = exports.AtomicCopyInitializerOutlet = exports.CopyInitializerOutlet = exports.ClassDirectInitializerOutlet = exports.ArrayDirectInitializerOutlet = exports.ReferenceDirectInitializerOutlet = exports.AtomicDirectInitializerOutlet = exports.ClassDefaultInitializerOutlet = exports.ArrayDefaultInitializerOutlet = exports.AtomicDefaultInitializerOutlet = exports.InitializerOutlet = exports.ReturnInitializerOutlet = exports.ReturnStatementOutlet = exports.BreakStatementOutlet = exports.ForStatementOutlet = exports.WhileStatementOutlet = exports.IfStatementOutlet = exports.NullStatementOutlet = exports.ExpressionStatementOutlet = exports.DeclarationStatementOutlet = exports.StatementOutlet = exports.BlockOutlet = exports.CtorInitializerOutlet = exports.ParameterOutlet = exports.FunctionOutlet = exports.PotentialFullExpressionOutlet = exports.ConstructOutlet = exports.cstringToString = exports.getValueString = exports.CODE_ANIMATIONS = void 0;
-exports.addChildStatementOutlet = exports.addChildInitializerOutlet = exports.addChildExpressionOutlet = exports.createStatementOutlet = exports.createInitializerOutlet = exports.createExpressionOutlet = exports.QualificationConversionOutlet = exports.StreamToBoolOutlet = exports.ArrayToPointerOutlet = exports.LValueToRValueOutlet = exports.TypeConversionOutlet = exports.ThisExpressionOutlet = exports.OpaqueExpressionOutlet = exports.StringLiteralExpressionOutlet = exports.NumericLiteralOutlet = exports.IdentifierOutlet = exports.InitializerListOutlet = exports.ParenthesesOutlet = exports.ArrowExpressionOutlet = exports.DotExpressionOutlet = exports.SubscriptExpressionOutlet = exports.PostfixIncrementExpressionOutlet = void 0;
+exports.NewArrayExpressionOutlet = exports.NewExpressionOutlet = exports.UnaryOperatorExpressionOutlet = exports.InputOperatorExpressionOutlet = exports.OutputOperatorExpressionOutlet = exports.BinaryOperatorExpressionOutlet = exports.MemberOperatorOverloadExpressionOutlet = exports.NonMemberOperatorOverloadExpressionOutlet = exports.MagicFunctionCallExpressionOutlet = exports.ArgumentInitializerOutlet = exports.FunctionCallOutlet = exports.FunctionCallExpressionOutlet = exports.CommaExpressionOutlet = exports.TernaryExpressionOutlet = exports.CompoundAssignmentExpressionOutlet = exports.AssignmentExpressionOutlet = exports.ExpressionOutlet = exports.ArrayMemberInitializerOutlet = exports.ArrayAggregateInitializerOutlet = exports.ClassCopyInitializerOutlet = exports.ReferenceCopyInitializerOutlet = exports.AtomicCopyInitializerOutlet = exports.CopyInitializerOutlet = exports.ClassDirectInitializerOutlet = exports.ArrayDirectInitializerOutlet = exports.ReferenceDirectInitializerOutlet = exports.AtomicDirectInitializerOutlet = exports.ClassDefaultInitializerOutlet = exports.ArrayDefaultInitializerOutlet = exports.AtomicDefaultInitializerOutlet = exports.InitializerOutlet = exports.ReturnInitializerOutlet = exports.ReturnStatementOutlet = exports.BreakStatementOutlet = exports.ForStatementOutlet = exports.WhileStatementOutlet = exports.IfStatementOutlet = exports.NullStatementOutlet = exports.ExpressionStatementOutlet = exports.DeclarationStatementOutlet = exports.StatementOutlet = exports.BlockOutlet = exports.CtorInitializerOutlet = exports.ParameterOutlet = exports.FunctionOutlet = exports.PotentialFullExpressionOutlet = exports.ConstructOutlet = exports.cstringToString = exports.getValueString = exports.CODE_ANIMATIONS = void 0;
+exports.addChildStatementOutlet = exports.addChildInitializerOutlet = exports.addChildExpressionOutlet = exports.createStatementOutlet = exports.createInitializerOutlet = exports.createExpressionOutlet = exports.QualificationConversionOutlet = exports.StreamToBoolOutlet = exports.ArrayToPointerOutlet = exports.LValueToRValueOutlet = exports.TypeConversionOutlet = exports.ThisExpressionOutlet = exports.OpaqueExpressionOutlet = exports.StringLiteralExpressionOutlet = exports.NumericLiteralOutlet = exports.IdentifierOutlet = exports.InitializerListOutlet = exports.ParenthesesOutlet = exports.ArrowExpressionOutlet = exports.DotExpressionOutlet = exports.SubscriptExpressionOutlet = exports.PostfixIncrementExpressionOutlet = exports.DeleteArrayExpressionOutlet = exports.DeleteExpressionOutlet = void 0;
 const util_1 = __webpack_require__(6560);
 const observe_1 = __webpack_require__(5114);
 const declarations_1 = __webpack_require__(8963);
@@ -78110,6 +79016,31 @@ class NewExpressionOutlet extends ExpressionOutlet {
     }
 }
 exports.NewExpressionOutlet = NewExpressionOutlet;
+class NewArrayExpressionOutlet extends ExpressionOutlet {
+    constructor(element, construct, parent) {
+        super(element, construct, parent);
+        this.exprElem.append(util_1.htmlDecoratedOperator("new", "code-unaryOp"));
+        this.exprElem.append(" ");
+        if (this.construct.createdType.isBoundedArrayType()) {
+            this.exprElem.append(util_1.htmlDecoratedType(this.construct.createdType.toString()));
+        }
+        else {
+            this.exprElem.append(util_1.htmlDecoratedType(this.construct.createdType.elemType.toString()));
+            this.exprElem.append("[");
+            this.dynamicLengthExpression = addChildExpressionOutlet(this.exprElem, this.construct.dynamicLengthExpression, this);
+            this.exprElem.append("]");
+        }
+        if (this.construct.individualElementInitializers.length > 0) {
+            this.exprElem.append("{ ");
+            this.individualElementInitializerOutlets = this.construct.individualElementInitializers.map(elemInit => createInitializerOutlet($("<span></span>").appendTo(this.exprElem), elemInit, this));
+            this.exprElem.append(" }");
+        }
+        else {
+            this.individualElementInitializerOutlets = [];
+        }
+    }
+}
+exports.NewArrayExpressionOutlet = NewArrayExpressionOutlet;
 class DeleteExpressionOutlet extends ExpressionOutlet {
     constructor(element, construct, parent) {
         super(element, construct, parent);
@@ -78119,6 +79050,15 @@ class DeleteExpressionOutlet extends ExpressionOutlet {
     }
 }
 exports.DeleteExpressionOutlet = DeleteExpressionOutlet;
+class DeleteArrayExpressionOutlet extends ExpressionOutlet {
+    constructor(element, construct, parent) {
+        super(element, construct, parent);
+        this.exprElem.append(util_1.htmlDecoratedOperator("delete[]", "code-unaryOp"));
+        this.exprElem.append(" ");
+        this.operand = addChildExpressionOutlet(this.exprElem, this.construct.operand, this);
+    }
+}
+exports.DeleteArrayExpressionOutlet = DeleteArrayExpressionOutlet;
 // Lobster.Outlets.CPP.NewExpression = Outlets.CPP.Expression.extend({
 //     _name: "Outlets.CPP.NewExpression",
 //     init: function(element, code, simOutlet){
@@ -78955,8 +79895,8 @@ class FileEditor {
     addMark(sourceRef, cssClass) {
         let from = { line: sourceRef.line - 1, ch: sourceRef.column - 1 };
         let to = { line: sourceRef.line - 1, ch: sourceRef.column - 1 + sourceRef.end - sourceRef.start };
-        var from2 = this.doc.posFromIndex(sourceRef.start);
-        var to2 = this.doc.posFromIndex(sourceRef.end);
+        // var from = this.doc.posFromIndex(sourceRef.start);
+        // var to = this.doc.posFromIndex(sourceRef.end);
         return this.doc.markText(from, to, { startStyle: "begin", endStyle: "end", className: "codeMark " + cssClass });
     }
     clearMarks() {
