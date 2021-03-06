@@ -54833,7 +54833,7 @@ class RuntimeDeleteExpression extends expressionBase_1.RuntimeExpression {
             // delete on a null pointer does nothing
             this.startCleanup();
         }
-        else if (this.model.dtor && !this.dtor) {
+        else if (!this.model.dtor || !this.dtor) {
             let obj = this.sim.memory.dereference(this.operand.evalResult);
             if (!obj.hasStorage("dynamic")) {
                 this.sim.eventOccurred(Simulation_1.SimulationEvent.UNDEFINED_BEHAVIOR, "Invalid delete");
@@ -54852,7 +54852,7 @@ class RuntimeDeleteExpression extends expressionBase_1.RuntimeExpression {
             }
             else {
                 util_1.asMutable(this).destroyedObject = obj;
-                if (obj.isTyped(types_1.isCompleteClassType)) {
+                if (obj.isTyped(types_1.isCompleteClassType) && this.model.dtor) {
                     let dtor = this.model.dtor.createRuntimeFunctionCall(this, obj);
                     util_1.asMutable(this).dtor = dtor;
                     this.sim.push(dtor);
