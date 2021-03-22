@@ -43164,6 +43164,179 @@ exports.RuntimeFunctionCallExpression = RuntimeFunctionCallExpression;
 
 /***/ }),
 
+/***/ 4822:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createMemberDeallocator = exports.createArrayDeallocator = exports.createStaticDeallocator = exports.createLocalDeallocator = exports.RuntimeObjectDeallocator = exports.ObjectDeallocator = void 0;
+const constructs_1 = __webpack_require__(4293);
+const errors_1 = __webpack_require__(5244);
+const types_1 = __webpack_require__(8716);
+const entities_1 = __webpack_require__(8397);
+const util_1 = __webpack_require__(6560);
+const FunctionCall_1 = __webpack_require__(20);
+class ObjectDeallocator extends constructs_1.BasicCPPConstruct {
+    constructor(context, targets) {
+        super(context, undefined); // Has no AST
+        this.construct_type = "ObjectDeallocator";
+        this.objectTargets = targets.filter(t => t.variableKind === "object");
+        this.referenceTargets = targets.filter(t => t.variableKind === "reference");
+        this.compoundCleanupConstructs = this.objectTargets.map((obj) => {
+            if (obj.isTyped(types_1.isCompleteClassType)) {
+                // If it's a class type object, we need to call its destructor
+                let dtor = obj.type.classDefinition.destructor;
+                if (dtor) {
+                    let dtorCall = new FunctionCall_1.FunctionCall(context, dtor, [], obj.type);
+                    this.attach(dtorCall);
+                    return dtorCall;
+                }
+                else {
+                    this.addNoDestructorNote(obj);
+                    return undefined;
+                }
+            }
+            else if (obj.isTyped(types_1.isBoundedArrayType)) {
+                // If it's an array, we recursively need to cleanup the elements
+                return createArrayDeallocator(context, obj);
+            }
+            else {
+                // object doesn't need any special cleanup (e.g. an atomic object)
+                return undefined;
+            }
+        });
+    }
+    createRuntimeConstruct(parentOrSim) {
+        return new RuntimeObjectDeallocator(this, parentOrSim);
+    }
+    addNoDestructorNote(obj) {
+        this.addNote(errors_1.CPPError.declaration.dtor.no_destructor(this, obj));
+    }
+}
+exports.ObjectDeallocator = ObjectDeallocator;
+class RuntimeObjectDeallocator extends constructs_1.RuntimeConstruct {
+    constructor(model, parentOrSim) {
+        super(model, "cleanup", parentOrSim);
+    }
+    upNextImpl() {
+        var _a;
+        if (this.index === undefined) {
+            return;
+        }
+        // Cleanup previous target that has just finished its destructor
+        // or array element cleanup
+        if ((_a = this.currentObjectTarget) === null || _a === void 0 ? void 0 : _a.isAlive) {
+            this.sim.memory.killObject(this.currentObjectTarget, this);
+        }
+        while (this.index > 0) {
+            --this.index;
+            this.currentObjectTarget = this.model.objectTargets[this.index].runtimeLookup(this);
+            if (!this.currentObjectTarget.isAlive) {
+                // skip any objects that aren't alive (i.e. weren't ever constructed)
+                continue;
+            }
+            let ccc = this.model.compoundCleanupConstructs[this.index];
+            if (!ccc) {
+                // no compound cleanup construct, just destroy the object
+                this.sim.memory.killObject(this.currentObjectTarget, this);
+                continue;
+            }
+            if ((ccc === null || ccc === void 0 ? void 0 : ccc.construct_type) === "FunctionCall") {
+                // call destructor
+                util_1.assert(this.currentObjectTarget.isTyped(types_1.isCompleteClassType));
+                this.sim.push(ccc.createRuntimeFunctionCall(this, this.currentObjectTarget));
+                return; // leave so that dtor can run
+            }
+            else if ((ccc === null || ccc === void 0 ? void 0 : ccc.construct_type) === "ObjectDeallocator") {
+                this.sim.push(ccc.createRuntimeConstruct(this));
+                return; // leave so that array elem deallocator can run
+            }
+        }
+        // Once we get here, all objects have been cleaned up and we
+        // just have references left
+        this.model.referenceTargets.forEach(refEntity => {
+            var _a;
+            // If the program is running, and this reference was bound
+            // to some object, the referred type should have
+            // been completed.
+            util_1.assert(refEntity.isTyped(types_1.isReferenceToCompleteType));
+            // destroying a reference doesn't really require doing anything,
+            // but we notify the referred object this reference has been removed
+            (_a = refEntity.runtimeLookup(this)) === null || _a === void 0 ? void 0 : _a.onReferenceUnbound(refEntity);
+        });
+        // Require at least one active step before leaving
+        this.startCleanup();
+    }
+    stepForwardImpl() {
+        // Require at least one stepforward before doing anything
+        // intentionally 1 too large - gets adjusted in first upNextImpl
+        this.index = this.model.objectTargets.length;
+    }
+}
+exports.RuntimeObjectDeallocator = RuntimeObjectDeallocator;
+class LocalDeallocator extends ObjectDeallocator {
+    constructor(context) {
+        super(context, context.blockLocals.localVariables);
+    }
+    addNoDestructorNote(obj) {
+        this.addNote(errors_1.CPPError.declaration.dtor.no_destructor_local(this, obj));
+    }
+}
+function createLocalDeallocator(context) {
+    return new LocalDeallocator(context);
+}
+exports.createLocalDeallocator = createLocalDeallocator;
+class StaticDeallocator extends ObjectDeallocator {
+    addNoDestructorNote(obj) {
+        this.addNote(errors_1.CPPError.declaration.dtor.no_destructor_static(this, obj));
+    }
+}
+function createStaticDeallocator(context, staticVariables) {
+    return new StaticDeallocator(context, staticVariables);
+}
+exports.createStaticDeallocator = createStaticDeallocator;
+class ArrayDeallocator extends ObjectDeallocator {
+    constructor(context, target) {
+        let elems = [];
+        for (let i = 0; i < target.type.numElems; ++i) {
+            elems.push(new entities_1.ArraySubobjectEntity(target, i));
+        }
+        super(context, elems);
+        this.addedDtorNote = false;
+    }
+    addNoDestructorNote(obj) {
+        if (!this.addedDtorNote) {
+            this.addNote(errors_1.CPPError.declaration.dtor.no_destructor_array(this, obj));
+            this.addedDtorNote = true; // only add this note once per array
+        }
+    }
+}
+function createArrayDeallocator(context, target) {
+    return new ArrayDeallocator(context, target);
+}
+exports.createArrayDeallocator = createArrayDeallocator;
+class MemberDeallocator extends ObjectDeallocator {
+    constructor(context, target) {
+        let classDef = target.type.classDefinition;
+        super(context, classDef.getBaseAndMemberEntities());
+        this.addedDtorNote = false;
+    }
+    addNoDestructorNote(obj) {
+        if (!this.addedDtorNote) {
+            this.addNote(errors_1.CPPError.declaration.dtor.no_destructor_array(this, obj));
+            this.addedDtorNote = true; // only add this note once per array
+        }
+    }
+}
+function createMemberDeallocator(context, target) {
+    return new MemberDeallocator(context, target);
+}
+exports.createMemberDeallocator = createMemberDeallocator;
+
+
+/***/ }),
+
 /***/ 2593:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -43310,7 +43483,7 @@ class RuntimeTemporaryDeallocator extends constructs_1.RuntimeConstruct {
             }
             else {
                 // a temp non-class-type object, no dtor needed.
-                this.sim.memory.killObject(temp.runtimeLookup(this.parent), this);
+                this.sim.memory.deallocateTemporaryObject(temp.runtimeLookup(this.parent), this);
             }
         }
         this.startCleanup();
@@ -43336,6 +43509,7 @@ const util_1 = __webpack_require__(6560);
 const entities_1 = __webpack_require__(8397);
 const constructs_1 = __webpack_require__(4293);
 const declarations_1 = __webpack_require__(8963);
+const ObjectDeallocator_1 = __webpack_require__(4822);
 /**
  *
  * The program also needs to know about all source files involved so that #include preprocessor
@@ -43349,7 +43523,7 @@ class Program {
         this.isCompilationUpToDate = true;
         this.sourceFiles = Object.assign({}, LIBRARY_FILES);
         this.translationUnits = {};
-        this.globalObjects = [];
+        this.staticObjects = [];
         this.functionCalls = [];
         this.linkedObjectDefinitions = {};
         this.linkedFunctionDefinitions = {};
@@ -43392,7 +43566,12 @@ class Program {
                 mainLookup.definitions.forEach(mainDef => this.addNote(errors_1.CPPError.link.main_multiple_def(mainDef.declaration)));
             }
         }
-        this.globalObjectAllocator = new constructs_1.GlobalObjectAllocator(this.context, this.globalObjects);
+        this.staticObjectAllocator = new constructs_1.GlobalObjectAllocator(this.context, this.staticObjects);
+        if (this.mainFunction) {
+            // Map from definitions to entities below to avoid any duplicates
+            // (this.linkedObjectEntities might have duplicates)
+            this.staticObjectDeallocator = ObjectDeallocator_1.createStaticDeallocator(this.mainFunction.context, this.staticObjects.map(def => def.declaredEntity));
+        }
     }
     defineIntrinsics() {
         // let intrinsicsTU = new TranslationUnit(this, new PreprocessedSource(new SourceFile("_intrinsics.cpp", ""), {}));
@@ -43419,7 +43598,7 @@ class Program {
     registerGlobalObjectDefinition(qualifiedName, def) {
         if (!this.linkedObjectDefinitions[qualifiedName.str]) {
             this.linkedObjectDefinitions[qualifiedName.str] = def;
-            util_1.asMutable(this.globalObjects).push(def);
+            util_1.asMutable(this.staticObjects).push(def);
         }
         else {
             // One definition rule violation
@@ -44226,7 +44405,7 @@ class Simulation {
         // also optionally create and push the main call taking over what is currently
         // in this.callMain()
         this.callMain();
-        this.globalAllocator = this.program.globalObjectAllocator.createRuntimeConstruct(this);
+        this.globalAllocator = this.program.staticObjectAllocator.createRuntimeConstruct(this);
         this.push(this.globalAllocator);
         this.observable.send("started");
         // Needed for whatever is first on the execution stack
@@ -44237,6 +44416,7 @@ class Simulation {
         this.mainFunction = new functions_1.RuntimeFunction(this.program.mainFunction, this, null);
         this.mainFunction.setReturnObject(this.mainReturnObject);
         this.mainFunction.pushStackFrame();
+        this.mainFunction.setCleanupConstruct(this.program.staticObjectDeallocator.createRuntimeConstruct(this));
         this.push(this.mainFunction);
         this.observable.send("mainCalled", this.mainFunction);
         this.mainFunction.gainControl();
@@ -45189,6 +45369,7 @@ const expressions_1 = __webpack_require__(6597);
 const lexical_1 = __webpack_require__(2018);
 const statements_1 = __webpack_require__(7266);
 const initializers_1 = __webpack_require__(1288);
+const ObjectDeallocator_1 = __webpack_require__(4822);
 class StorageSpecifier extends constructs_1.BasicCPPConstruct {
     constructor(context, specs) {
         super(context, undefined);
@@ -45498,11 +45679,6 @@ function createMemberSimpleDeclarationFromAST(ast, context) {
     });
 }
 exports.createMemberSimpleDeclarationFromAST = createMemberSimpleDeclarationFromAST;
-function test() {
-    let x;
-    let y;
-    y = x;
-}
 class SimpleDeclaration extends constructs_1.BasicCPPConstruct {
     constructor(context, ast, typeSpec, storageSpec, declarator, otherSpecs) {
         var _a;
@@ -45625,7 +45801,7 @@ class FunctionDeclaration extends SimpleDeclaration {
                         this.addNote(errors_1.CPPError.declaration.func.nonCovariantReturnType(this, this.type.returnType, matchInBase.type.returnType));
                     }
                 }
-                base = base.classDefinition.baseClass;
+                base = base.classDefinition.baseType;
             }
         }
         else {
@@ -46146,6 +46322,13 @@ class FunctionDefinition extends constructs_1.BasicCPPConstruct {
         this.attach(this.body = body);
         this.name = declaration.name;
         this.type = declaration.type;
+        if (this.declaration.isDestructor) {
+            // TODO: the cast on the line below seems kinda sus
+            //       At this point (in a member function DEFINITION)
+            //       I believe the receiver type should always be complete.
+            //       Should that be ensured elsewhere? 
+            this.attach(this.memberDeallocator = ObjectDeallocator_1.createMemberDeallocator(context, new entities_1.ReceiverEntity(this.type.receiverType)));
+        }
         this.declaration.declaredEntity.setDefinition(this);
         this.context.translationUnit.program.registerFunctionDefinition(this.declaration.declaredEntity.qualifiedName, this);
     }
@@ -46287,7 +46470,7 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         this.attach(this.declaration = declaration);
         this.attachAll(this.baseSpecifiers = baseSpecs);
         if (baseSpecs.length > 0 && ((_a = baseSpecs[0].baseEntity) === null || _a === void 0 ? void 0 : _a.isComplete())) {
-            this.baseClass = baseSpecs[0].baseEntity.type;
+            this.baseType = baseSpecs[0].baseEntity.type;
         }
         if (baseSpecs.length > 1) {
             this.addNote(errors_1.CPPError.class_def.multiple_inheritance(this));
@@ -46360,8 +46543,8 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         });
         // Compute size of objects of this class
         let size = 0;
-        if (this.baseClass) {
-            size += this.baseClass.size;
+        if (this.baseType) {
+            size += this.baseType.size;
         }
         this.memberObjectEntities.forEach(mem => size += mem.type.size);
         this.objectSize = size;
@@ -46466,8 +46649,8 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         if (this.memberReferenceEntities.length > 0) {
             return;
         }
-        let subobjectTypes = this.baseClass
-            ? [this.baseClass, ...this.memberObjectEntities.map(e => e.type)]
+        let subobjectTypes = this.baseType
+            ? [this.baseType, ...this.memberObjectEntities.map(e => e.type)]
             : this.memberObjectEntities.map(e => e.type);
         // All subobjects (bases and members) must be default constructible and destructible
         if (!subobjectTypes.every(t => t.isDefaultConstructible() && t.isDestructible())) {
@@ -46497,11 +46680,11 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
             return;
         }
         // If the base class has no destructor, don't create the implicit copy ctor
-        if (this.baseClass && !this.baseClass.isDestructible()) {
+        if (this.baseType && !this.baseType.isDestructible()) {
             return;
         }
-        let subobjectTypes = this.baseClass
-            ? [this.baseClass, ...this.memberObjectEntities.map(e => e.type)]
+        let subobjectTypes = this.baseType
+            ? [this.baseType, ...this.memberObjectEntities.map(e => e.type)]
             : this.memberObjectEntities.map(e => e.type);
         // Can we create a copy ctor with a const &T param?
         // All subobjects (bases and members) must have a copy ctor with a similarly const param
@@ -46523,8 +46706,8 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         // is ambiguous for the parameter to the copy ctor (the actual "name" of the ctor would be ok)
         let src = `//@className=${this.name}\n${this.name}(${refParamCanBeConst ? "const " : ""}${this.name} &other)`;
         let memInits = this.memberVariableEntities.map(mem => `${mem.name}(other.${mem.name})`);
-        if (this.baseClass) {
-            memInits.unshift(this.baseClass.className + "(other)");
+        if (this.baseType) {
+            memInits.unshift(this.baseType.className + "(other)");
         }
         if (memInits.length > 0) {
             src += `\n : ${memInits.join(", ")}`;
@@ -46558,8 +46741,8 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         if (this.memberReferenceEntities.length > 0) {
             return;
         }
-        let subobjectTypes = this.baseClass
-            ? [this.baseClass, ...this.memberObjectEntities.map(e => e.type)]
+        let subobjectTypes = this.baseType
+            ? [this.baseType, ...this.memberObjectEntities.map(e => e.type)]
             : this.memberObjectEntities.map(e => e.type);
         // All member objects must be copy-assignable
         // This cover the following language from the standard where we can't make a copy assignment operator:
@@ -46583,8 +46766,8 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         // is ambiguous for the parameter to the assn op (the actual "name" of the ctor would be ok)
         let src = `//@className=${this.name}\n${this.name} &operator=(${refParamCanBeConst ? "const " : ""}${this.name} &rhs) {\n`;
         src += "  if (this == &rhs) { return *this; }\n";
-        if (this.baseClass) {
-            src += `  ${this.baseClass.className}::operator=(rhs);\n`;
+        if (this.baseType) {
+            src += `  ${this.baseType.className}::operator=(rhs);\n`;
         }
         src += this.memberObjectEntities.map(mem => mem.isTyped(types_1.isBoundedArrayType)
             ? `  for(int i = 0; i < ${mem.type.numElems}; ++i) {\n    ${mem.name}[i] = rhs.${mem.name}[i];\n  }\n`
@@ -46600,8 +46783,8 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
         if (this.destructor) {
             return;
         }
-        let subobjectTypes = this.baseClass
-            ? [this.baseClass, ...this.memberObjectEntities.map(e => e.type)]
+        let subobjectTypes = this.baseType
+            ? [this.baseType, ...this.memberObjectEntities.map(e => e.type)]
             : this.memberObjectEntities.map(e => e.type);
         // All subobjects (bases and members) must be destructible
         if (!subobjectTypes.every(t => t.isDestructible())) {
@@ -46750,6 +46933,11 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
     //     },
     //     stepForward : function(sim: Simulation, rtConstruct: RuntimeConstruct){
     //     }
+    getBaseAndMemberEntities() {
+        return this.baseType
+            ? [new entities_1.BaseSubobjectEntity(new entities_1.ReceiverEntity(this.type), this.baseType), ...this.memberVariableEntities]
+            : this.memberVariableEntities;
+    }
     isSuccessfullyCompiled() {
         return super.isSuccessfullyCompiled();
     }
@@ -48019,7 +48207,7 @@ class BaseSubobjectEntity extends CPPEntity {
         this.variableKind = "object";
         this.containingEntity = containingEntity;
         // This should always be true as long as we don't allow multiple inheritance
-        util_1.assert((_a = this.containingEntity.type.classDefinition.baseClass) === null || _a === void 0 ? void 0 : _a.similarType(type));
+        util_1.assert((_a = this.containingEntity.type.classDefinition.baseType) === null || _a === void 0 ? void 0 : _a.similarType(type));
     }
     runtimeLookup(rtConstruct) {
         return this.containingEntity.runtimeLookup(rtConstruct).getBaseSubobject();
@@ -48331,7 +48519,7 @@ class FunctionEntity extends DeclaredEntityBase {
             let finalOverrider;
             while (!finalOverrider && dynamicType) {
                 finalOverrider = this.overriders[dynamicType.qualifiedName.str];
-                dynamicType = dynamicType.classDefinition.baseClass;
+                dynamicType = dynamicType.classDefinition.baseType;
             }
             return (finalOverrider === null || finalOverrider === void 0 ? void 0 : finalOverrider.definition) || this.definition;
         }
@@ -48793,8 +48981,17 @@ exports.CPPError = {
             },
         },
         dtor: {
+            no_destructor: function (construct, entity) {
+                return new CompilerNote(construct, NoteKind.ERROR, "declaration.dtor.no_destructor", "The object " + entity.describe().name + " needs to be destroyed, but I can't find a destructor for the " + entity.type + " class. The compiler sometimes provides one implicitly for you, but not if one of its members or its base class are missing a destructor.");
+            },
             no_destructor_local: function (construct, entity) {
                 return new CompilerNote(construct, NoteKind.ERROR, "declaration.dtor.no_destructor_local", "The local variable " + entity.name + " needs to be destroyed when it \"goes out of scope\", but I can't find a destructor for the " + entity.type + " class. The compiler sometimes provides one implicitly for you, but not if one of its members or its base class are missing a destructor.");
+            },
+            no_destructor_static: function (construct, entity) {
+                return new CompilerNote(construct, NoteKind.ERROR, "declaration.dtor.no_destructor_local", "The variable " + entity.name + " needs to be destroyed when the program ends, but I can't find a destructor for the " + entity.type + " class. The compiler sometimes provides one implicitly for you, but not if one of its members or its base class are missing a destructor.");
+            },
+            no_destructor_array: function (construct, entity) {
+                return new CompilerNote(construct, NoteKind.ERROR, "declaration.dtor.no_destructor_array", "The elements of " + entity.arrayEntity + " need to be destroyed with the overall array, but I can't find a destructor for the " + entity.type + " class. The compiler sometimes provides one implicitly for you, but not if one of its members or its base class are missing a destructor.");
             },
             // no_destructor_member : function(construct: TranslationUnitConstruct, entity: ObjectEntity, containingClass) {
             //     return new CompilerNote(construct, NoteKind.ERROR, "declaration.dtor.no_destructor_member", "The member variable " + entity.name + " needs to be destroyed as part of the " + containingClass.className + " destructor, but I can't find a destructor for the " + entity.type + " class. The compiler sometimes provides one implicitly for you, but not if one of its members or its base class are missing a destructor.");
@@ -49007,6 +49204,9 @@ exports.CPPError = {
             },
             array_default_init: function (construct) {
                 return new CompilerNote(construct, NoteKind.WARNING, "declaration.init.array_default_init", "Note: Default initialization of an array requires default initialization of each of its elements.");
+            },
+            array_value_init: function (construct) {
+                return new CompilerNote(construct, NoteKind.WARNING, "declaration.init.array_value_init", "Note: Value initialization of an array requires value initialization of each of its elements.");
             },
             array_direct_init: function (construct) {
                 return new CompilerNote(construct, NoteKind.OTHER, "declaration.init.array_direct_init", "Note: initialization of an array requires initialization of each of its elements.");
@@ -50040,11 +50240,12 @@ class AssignmentExpression extends expressionBase_1.Expression {
         this.attach(this.rhs = rhs);
     }
     static createFromAST(ast, context) {
+        var _a;
         let lhs = createExpressionFromAST(ast.lhs, context);
         let rhs = createExpressionFromAST(ast.rhs, context);
         // Consider an assignment operator overload if the LHS is class type
         if (predicates_1.Predicates.isTypedExpression(lhs, types_1.isPotentiallyCompleteClassType)) {
-            return selectOperatorOverload(context, ast, "=", [lhs, rhs]);
+            return (_a = selectOperatorOverload(context, ast, "=", [lhs, rhs])) !== null && _a !== void 0 ? _a : new InvalidOperatorOverloadExpression(context, ast, ast.operator, [lhs, rhs]);
         }
         return new AssignmentExpression(context, ast, lhs, rhs);
     }
@@ -50129,11 +50330,12 @@ class CompoundAssignmentExpression extends expressionBase_1.Expression {
         this.attach(this.rhs = rhs);
     }
     static createFromAST(ast, context) {
+        var _a;
         let lhs = createExpressionFromAST(ast.lhs, context);
         let rhs = createExpressionFromAST(ast.rhs, context);
         // Consider a compound assignment operator overload if the LHS is class type
         if (predicates_1.Predicates.isTypedExpression(lhs, types_1.isPotentiallyCompleteClassType)) {
-            return selectOperatorOverload(context, ast, ast.operator, [lhs, rhs]);
+            return (_a = selectOperatorOverload(context, ast, ast.operator, [lhs, rhs])) !== null && _a !== void 0 ? _a : new InvalidOperatorOverloadExpression(context, ast, ast.operator, [lhs, rhs]);
         }
         return new CompoundAssignmentExpression(context, ast, lhs, rhs);
     }
@@ -50356,7 +50558,7 @@ class ArithmeticBinaryOperatorExpression extends BinaryOperatorExpression {
         // be implemented as overloaded operators. 
         if (predicates_1.Predicates.isTypedExpression(left, types_1.isPotentiallyCompleteClassType) && predicates_1.Predicates.isTypedExpression(right, types_1.isPotentiallyCompleteClassType)) {
             let overload = selectOperatorOverload(context, ast, op, [left, right]);
-            if (overload.construct_type !== "invalid_operator_overload_expression") {
+            if (overload) {
                 return overload;
             }
         }
@@ -50736,7 +50938,10 @@ class RelationalBinaryOperatorExpression extends BinaryOperatorExpression {
         let op = ast.operator;
         // If either one is a class type, we consider operator overloads
         if (predicates_1.Predicates.isTypedExpression(left, types_1.isPotentiallyCompleteClassType) || predicates_1.Predicates.isTypedExpression(right, types_1.isPotentiallyCompleteClassType)) {
-            return selectOperatorOverload(context, ast, op, [left, right]);
+            let overload = selectOperatorOverload(context, ast, op, [left, right]);
+            if (overload) {
+                return overload;
+            }
         }
         if (predicates_1.Predicates.isTypedExpression(left, types_1.isPointerType) || predicates_1.Predicates.isTypedExpression(left, types_1.isBoundedArrayType, "lvalue")) {
             if (predicates_1.Predicates.isTypedExpression(right, types_1.isPointerType) || predicates_1.Predicates.isTypedExpression(right, types_1.isBoundedArrayType, "lvalue")) {
@@ -51442,14 +51647,13 @@ class SubscriptExpression extends expressionBase_1.Expression {
         }
     }
     static createFromAST(ast, context) {
+        var _a;
         let operand = createExpressionFromAST(ast.operand, context);
         let offset = createExpressionFromAST(ast.offset, context);
         // Consider an assignment operator overload if the LHS is class type
         if (predicates_1.Predicates.isTypedExpression(operand, types_1.isPotentiallyCompleteClassType)) {
-            let overload = selectOperatorOverload(context, ast, "[]", [operand, offset]);
-            if (overload) {
-                return overload;
-            }
+            return (_a = selectOperatorOverload(context, ast, "[]", [operand, offset])) !== null && _a !== void 0 ? _a : new InvalidOperatorOverloadExpression(context, ast, "[]", [operand, offset]);
+            ;
         }
         return new SubscriptExpression(context, ast, operand, offset);
     }
@@ -53128,7 +53332,7 @@ function usualArithmeticConversions(leftOrig, rightOrig) {
 exports.usualArithmeticConversions = usualArithmeticConversions;
 function selectOperatorOverload(context, ast, operator, originalArgs) {
     if (!expressionBase_1.allWellTyped(originalArgs)) {
-        return new InvalidOperatorOverloadExpression(context, ast, operator, originalArgs);
+        return undefined;
     }
     let leftmost = originalArgs[0];
     let operatorFunctionName = "operator" + operator;
@@ -53149,7 +53353,7 @@ function selectOperatorOverload(context, ast, operator, originalArgs) {
     }
     // If we still don't have anything
     if (!lookupResult || !adjustedArgs) {
-        return new InvalidOperatorOverloadExpression(context, ast, operator, originalArgs);
+        return undefined;
     }
     // These are not possible since you can't have a variable or
     // class with a name of e.g. "operator+"
@@ -53165,7 +53369,7 @@ function selectOperatorOverload(context, ast, operator, originalArgs) {
         }
     }
     else {
-        return new InvalidOperatorOverloadExpression(context, ast, operator, originalArgs);
+        return undefined;
     }
 }
 exports.selectOperatorOverload = selectOperatorOverload;
@@ -53178,12 +53382,6 @@ class NonMemberOperatorOverloadExpression extends expressionBase_1.Expression {
         // If any arguments are not well typed, we can't select a function.
         if (!expressionBase_1.allWellTyped(args)) {
             // type, valueCategory, and call remain undefined
-            this.attachAll(args);
-            return;
-        }
-        if (!selectedFunctionEntity) {
-            // type, valueCategory, and call remain undefined
-            this.addNote(errors_1.CPPError.expr.operatorOverload.no_such_overload(this, this.operator));
             this.attachAll(args);
             return;
         }
@@ -53261,12 +53459,6 @@ class MemberOperatorOverloadExpression extends expressionBase_1.Expression {
         // If any arguments are not well typed, we can't select a function.
         if (!receiverExpression.isWellTyped() || !expressionBase_1.allWellTyped(args)) {
             // type, valueCategory, and call remain undefined
-            this.attachAll(args);
-            return;
-        }
-        if (!selectedFunctionEntity) {
-            // type, valueCategory, and call remain undefined
-            this.addNote(errors_1.CPPError.expr.operatorOverload.no_such_overload(this, this.operator));
             this.attachAll(args);
             return;
         }
@@ -53394,8 +53586,12 @@ class RuntimeFunction extends constructs_1.RuntimeConstruct {
         this.receiver = receiver;
         // A function is its own containing function context
         this.setContainingRuntimeFunction(this);
-        this.ctorInitializer = (_a = this.model.ctorInitializer) === null || _a === void 0 ? void 0 : _a.createRuntimeCtorInitializer(this);
-        this.body = statements_1.createRuntimeStatement(this.model.body, this);
+        this.ctorInitializer = (_a = model.ctorInitializer) === null || _a === void 0 ? void 0 : _a.createRuntimeCtorInitializer(this);
+        this.body = statements_1.createRuntimeStatement(model.body, this);
+        if (model.memberDeallocator) {
+            this.memberDeallocator = model.memberDeallocator.createRuntimeConstruct(this);
+            this.setCleanupConstruct(this.memberDeallocator);
+        }
     }
     // setCaller : function(caller) {
     //     this.i_caller = caller;
@@ -53417,13 +53613,14 @@ class RuntimeFunction extends constructs_1.RuntimeConstruct {
         util_1.assert(this.stackFrame);
         return this.stackFrame.localObjectLookup(param);
     }
-    initializeParameterObject(num, value) {
-        let param = this.model.parameters[num].declaredEntity;
-        util_1.assert(param instanceof entities_1.LocalObjectEntity, "Can't look up an object for a reference parameter.");
-        util_1.assert(this.stackFrame);
-        util_1.assert(param.type.isAtomicType());
-        this.stackFrame.initializeLocalObject(param, value);
-    }
+    // TODO: apparently this is not used?
+    // public initializeParameterObject(num: number, value: Value<AtomicType>) {
+    //     let param = this.model.parameters[num].declaredEntity;
+    //     assert(param instanceof LocalObjectEntity, "Can't look up an object for a reference parameter.");
+    //     assert(this.stackFrame);
+    //     assert(param.type.isAtomicType());
+    //     this.stackFrame.initializeLocalObject(<LocalObjectEntity<AtomicType>>param, <Value<AtomicType>>value);
+    // }
     bindReferenceParameter(num, obj) {
         let param = this.model.parameters[num].declaredEntity;
         util_1.assert(param instanceof entities_1.LocalReferenceEntity, "Can't bind an object parameter like a reference.");
@@ -53490,7 +53687,7 @@ exports.RuntimeFunction = RuntimeFunction;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RuntimeArrayAggregateInitializer = exports.ArrayAggregateInitializer = exports.RuntimeListInitializer = exports.ListInitializer = exports.RuntimeArrayMemberInitializer = exports.ArrayMemberInitializer = exports.RuntimeCtorInitializer = exports.CtorInitializer = exports.RuntimeClassDirectInitializer = exports.ClassDirectInitializer = exports.RuntimeArrayDirectInitializer = exports.ArrayDirectInitializer = exports.RuntimeAtomicDirectInitializer = exports.AtomicDirectInitializer = exports.RuntimeReferenceDirectInitializer = exports.ReferenceDirectInitializer = exports.RuntimeDirectInitializer = exports.DirectInitializer = exports.RuntimeClassDefaultInitializer = exports.ClassDefaultInitializer = exports.RuntimeArrayDefaultInitializer = exports.ArrayDefaultInitializer = exports.RuntimeAtomicDefaultInitializer = exports.AtomicDefaultInitializer = exports.ReferenceDefaultInitializer = exports.RuntimeDefaultInitializer = exports.DefaultInitializer = exports.RuntimeInitializer = exports.Initializer = void 0;
+exports.RuntimeArrayAggregateInitializer = exports.ArrayAggregateInitializer = exports.RuntimeListInitializer = exports.ListInitializer = exports.RuntimeArrayMemberInitializer = exports.ArrayMemberInitializer = exports.RuntimeCtorInitializer = exports.CtorInitializer = exports.RuntimeClassDirectInitializer = exports.ClassDirectInitializer = exports.RuntimeArrayDirectInitializer = exports.ArrayDirectInitializer = exports.RuntimeAtomicDirectInitializer = exports.AtomicDirectInitializer = exports.RuntimeReferenceDirectInitializer = exports.ReferenceDirectInitializer = exports.RuntimeDirectInitializer = exports.DirectInitializer = exports.RuntimeClassValueInitializer = exports.ClassValueInitializer = exports.RuntimeArrayValueInitializer = exports.ArrayValueInitializer = exports.ReferenceValueInitializer = exports.RuntimeAtomicValueInitializer = exports.AtomicValueInitializer = exports.RuntimeValueInitializer = exports.ValueInitializer = exports.RuntimeClassDefaultInitializer = exports.ClassDefaultInitializer = exports.RuntimeArrayDefaultInitializer = exports.ArrayDefaultInitializer = exports.RuntimeAtomicDefaultInitializer = exports.AtomicDefaultInitializer = exports.ReferenceDefaultInitializer = exports.RuntimeDefaultInitializer = exports.DefaultInitializer = exports.RuntimeInitializer = exports.Initializer = void 0;
 const constructs_1 = __webpack_require__(4293);
 const PotentialFullExpression_1 = __webpack_require__(2593);
 const FunctionCall_1 = __webpack_require__(20);
@@ -53501,6 +53698,7 @@ const util_1 = __webpack_require__(6560);
 const errors_1 = __webpack_require__(5244);
 const expressionBase_1 = __webpack_require__(9180);
 const codeOutlets_1 = __webpack_require__(3004);
+const runtimeEnvironment_1 = __webpack_require__(5320);
 const opaqueExpression_1 = __webpack_require__(7104);
 class Initializer extends PotentialFullExpression_1.PotentialFullExpression {
     isTailChild(child) {
@@ -53559,7 +53757,8 @@ class ReferenceDefaultInitializer extends DefaultInitializer {
         return util_1.assertFalse("Cannot create an outlet for a reference default initializer, since such an initializer is always ill-formed.");
     }
     explain(sim, rtConstruct) {
-        return util_1.assertFalse("A default initializer for a reference is not allowed.");
+        let targetDesc = this.target.describe();
+        return { message: "As a reference, " + (targetDesc.name || targetDesc.message) + " must be bound to something. (It cannot be left un-initialized.)" };
     }
 }
 exports.ReferenceDefaultInitializer = ReferenceDefaultInitializer;
@@ -53590,6 +53789,7 @@ class RuntimeAtomicDefaultInitializer extends RuntimeDefaultInitializer {
     upNextImpl() {
         // No initialization. Object has junk value.
         let target = this.model.target.runtimeLookup(this);
+        target.beginLifetime();
         this.observable.send("atomicObjectInitialized", this);
         this.startCleanup();
     }
@@ -53662,7 +53862,8 @@ class RuntimeArrayDefaultInitializer extends RuntimeDefaultInitializer {
         }
         else {
             let target = this.model.target.runtimeLookup(this);
-            this.observable.send("arrayObjectInitialized", target);
+            target.beginLifetime();
+            this.observable.send("arrayObjectInitialized", this);
             this.startCleanup();
         }
     }
@@ -53714,7 +53915,8 @@ class RuntimeClassDefaultInitializer extends RuntimeDefaultInitializer {
         }
         else {
             let target = this.model.target.runtimeLookup(this);
-            this.observable.send("initialized", target);
+            target.beginLifetime();
+            this.observable.send("classObjectInitialized", this);
             this.startCleanup();
         }
     }
@@ -53723,6 +53925,225 @@ class RuntimeClassDefaultInitializer extends RuntimeDefaultInitializer {
     }
 }
 exports.RuntimeClassDefaultInitializer = RuntimeClassDefaultInitializer;
+class ValueInitializer extends Initializer {
+    constructor() {
+        super(...arguments);
+        this.kind = "value";
+    }
+    static create(context, target) {
+        if (target.type.isReferenceType()) {
+            return new ReferenceValueInitializer(context, target);
+        }
+        else if (target.type.isAtomicType()) {
+            return new AtomicValueInitializer(context, target);
+        }
+        else if (target.type.isBoundedArrayType()) {
+            return new ArrayValueInitializer(context, target);
+        }
+        else if (target.type.isCompleteClassType()) {
+            return new ClassValueInitializer(context, target);
+        }
+        else {
+            return util_1.assertNever(target.type);
+        }
+    }
+}
+exports.ValueInitializer = ValueInitializer;
+class RuntimeValueInitializer extends RuntimeInitializer {
+    constructor(model, parent) {
+        super(model, parent);
+    }
+}
+exports.RuntimeValueInitializer = RuntimeValueInitializer;
+// NOTE: NOT POSSIBLE TO VALUE-INITIALIZE A REFERENCE
+class AtomicValueInitializer extends ValueInitializer {
+    constructor(context, target) {
+        super(context, undefined);
+        this.construct_type = "AtomicValueInitializer";
+        this.target = target;
+    }
+    createRuntimeInitializer(parent) {
+        return new RuntimeAtomicValueInitializer(this, parent);
+    }
+    createDefaultOutlet(element, parent) {
+        return new codeOutlets_1.AtomicValueInitializerOutlet(element, this, parent);
+    }
+    explain(sim, rtConstruct) {
+        let targetDesc = this.target.describe();
+        return { message: `${targetDesc.name || targetDesc.message} is "value-initialized" to the equivalent of a 0 value for its type.` };
+    }
+}
+exports.AtomicValueInitializer = AtomicValueInitializer;
+class RuntimeAtomicValueInitializer extends RuntimeValueInitializer {
+    constructor(model, parent) {
+        super(model, parent);
+    }
+    upNextImpl() {
+        // Initialized to equivalent of 0 in target type
+        let target = this.model.target.runtimeLookup(this);
+        target.initializeValue(new runtimeEnvironment_1.Value(0, target.type));
+        this.observable.send("atomicObjectInitialized", this);
+        this.startCleanup();
+    }
+    stepForwardImpl() {
+        // do nothing
+    }
+}
+exports.RuntimeAtomicValueInitializer = RuntimeAtomicValueInitializer;
+class ReferenceValueInitializer extends ValueInitializer {
+    constructor(context, target) {
+        super(context, undefined);
+        this.construct_type = "ReferenceValueInitializer";
+        this.target = target;
+        // Cannot default initialize a reference
+        this.addNote(errors_1.CPPError.declaration.init.referenceBind(this));
+    }
+    createRuntimeInitializer(parent) {
+        return util_1.assertFalse("A default initializer for a reference is not allowed.");
+    }
+    createDefaultOutlet(element, parent) {
+        return util_1.assertFalse("Cannot create an outlet for a reference default initializer, since such an initializer is always ill-formed.");
+    }
+    explain(sim, rtConstruct) {
+        let targetDesc = this.target.describe();
+        return { message: "As a reference, " + (targetDesc.name || targetDesc.message) + " must be bound to something. (It cannot be left un-initialized.)" };
+    }
+}
+exports.ReferenceValueInitializer = ReferenceValueInitializer;
+// Note: No CompiledReferenceValueInitializer or RuntimeReferenceValueInitializer classes since
+//       default initialization of a reference is always ill-formed.
+class ArrayValueInitializer extends ValueInitializer {
+    constructor(context, target) {
+        super(context, undefined);
+        this.construct_type = "ArrayValueInitializer";
+        this.target = target;
+        // If it's an array of atomic types, do nothing.
+        this.elementInitializers = [];
+        for (let i = 0; i < target.type.numElems; ++i) {
+            let elemInit = ValueInitializer.create(context, new entities_1.ArraySubobjectEntity(target, i));
+            this.elementInitializers.push(elemInit);
+            this.attach(elemInit);
+            if (elemInit.notes.hasErrors) {
+                this.addNote(errors_1.CPPError.declaration.init.array_value_init(this));
+                break;
+            }
+        }
+    }
+    createRuntimeInitializer(parent) {
+        return new RuntimeArrayValueInitializer(this, parent);
+    }
+    createDefaultOutlet(element, parent) {
+        return new codeOutlets_1.ArrayValueInitializerOutlet(element, this, parent);
+    }
+    explain(sim, rtConstruct) {
+        let targetDesc = this.target.describe();
+        let targetType = this.target.type;
+        if (targetType.numElems === 0) {
+            return { message: "No initialization is performed for " + (targetDesc.name || targetDesc.message) + "because the array has length 0." };
+        }
+        else if (targetType.elemType instanceof types_1.AtomicType) {
+            return { message: `The elements of ${targetDesc.name || targetDesc.message} will be "value-initialized" to the equivalent of a 0 value for their type.` };
+        }
+        else {
+            return {
+                message: "Each element of " + (targetDesc.name || targetDesc.message) + " will be value-initialized. For example, " +
+                    this.elementInitializers[0].explain(sim, rtConstruct)
+            };
+        }
+    }
+}
+exports.ArrayValueInitializer = ArrayValueInitializer;
+class RuntimeArrayValueInitializer extends RuntimeValueInitializer {
+    constructor(model, parent) {
+        super(model, parent);
+        this.index = 0;
+        if (this.model.elementInitializers) {
+            this.elementInitializers = this.model.elementInitializers.map((elemInit) => {
+                return elemInit.createRuntimeInitializer(this);
+            });
+        }
+    }
+    upNextImpl() {
+        if (this.elementInitializers && this.index < this.elementInitializers.length) {
+            this.sim.push(this.elementInitializers[this.index++]);
+        }
+        else {
+            let target = this.model.target.runtimeLookup(this);
+            target.beginLifetime();
+            this.observable.send("arrayObjectInitialized", this);
+            this.startCleanup();
+        }
+    }
+    stepForwardImpl() {
+        // do nothing
+    }
+}
+exports.RuntimeArrayValueInitializer = RuntimeArrayValueInitializer;
+class ClassValueInitializer extends ValueInitializer {
+    constructor(context, target) {
+        super(context, undefined);
+        this.construct_type = "ClassValueInitializer";
+        this.target = target;
+        // Try to find default constructor. Not using lookup because constructors have no name.
+        // TODO: do I need to tell overloadResolution what the receiver type is here? they're all ctors i guess
+        let overloadResult = expressions_1.overloadResolution(target.type.classDefinition.constructors, []);
+        if (!overloadResult.selected) {
+            this.addNote(errors_1.CPPError.declaration.init.no_default_constructor(this, this.target));
+            return;
+        }
+        this.ctor = overloadResult.selected;
+        this.ctorCall = new FunctionCall_1.FunctionCall(context, this.ctor, [], target.type.cvUnqualified());
+        this.attach(this.ctorCall);
+        // this.args = this.ctorCall.args;
+    }
+    createRuntimeInitializer(parent) {
+        return new RuntimeClassValueInitializer(this, parent);
+    }
+    createDefaultOutlet(element, parent) {
+        return new codeOutlets_1.ClassValueInitializerOutlet(element, this, parent);
+    }
+    explain(sim, rtConstruct) {
+        let targetDesc = this.target.describe();
+        // TODO: what if there is an error that causes no ctor to be found/available
+        if (!this.ctor) {
+            return { message: (targetDesc.name || targetDesc.message) + " cannot be initialized because the " + this.target.type + " class has no default constructor." };
+        }
+        else if (this.ctor.isImplicit) {
+            return { message: (targetDesc.name || targetDesc.message) + " will be zero-initialized, followed by initialization using " + this.ctorCall.describe(sim, rtConstruct).message };
+        }
+        else {
+            return { message: (targetDesc.name || targetDesc.message) + " will be initialized using " + this.ctorCall.describe(sim, rtConstruct).message };
+        }
+    }
+}
+exports.ClassValueInitializer = ClassValueInitializer;
+class RuntimeClassValueInitializer extends RuntimeValueInitializer {
+    constructor(model, parent) {
+        super(model, parent);
+        this.target = this.model.target.runtimeLookup(this);
+        this.ctorCall = this.model.ctorCall.createRuntimeFunctionCall(this, this.target);
+        this.index = this.model.ctor.isImplicit ? "zeroOut" : "callCtor";
+    }
+    upNextImpl() {
+        if (this.index === "callCtor") {
+            this.sim.push(this.ctorCall);
+            this.index = "done";
+        }
+        else {
+            let target = this.model.target.runtimeLookup(this);
+            target.beginLifetime();
+            this.observable.send("classObjectInitialized", this);
+            this.startCleanup();
+        }
+    }
+    stepForwardImpl() {
+        if (this.index === "zeroOut") {
+            this.target.zeroInitialize();
+            this.index = "callCtor";
+        }
+    }
+}
+exports.RuntimeClassValueInitializer = RuntimeClassValueInitializer;
 class DirectInitializer extends Initializer {
     constructor(context, kind) {
         super(context, undefined);
@@ -53937,7 +54358,7 @@ class RuntimeAtomicDirectInitializer extends RuntimeDirectInitializer {
     // }
     stepForwardImpl() {
         let target = this.model.target.runtimeLookup(this);
-        target.writeValue(this.arg.evalResult);
+        target.initializeValue(this.arg.evalResult);
         this.observable.send("atomicObjectInitialized", this);
         // this.notifyPassing();
         this.startCleanup();
@@ -54009,8 +54430,9 @@ class RuntimeArrayDirectInitializer extends RuntimeDirectInitializer {
         let arrayElemSubobjects = target.getArrayElemSubobjects();
         // should be true if compilation was successful
         util_1.assert(charsToWrite.length == arrayElemSubobjects.length);
-        charsToWrite.forEach((c, i) => arrayElemSubobjects[i].writeValue(c));
-        this.observable.send("initialized", target);
+        charsToWrite.forEach((c, i) => arrayElemSubobjects[i].initializeValue(c));
+        target.beginLifetime();
+        this.observable.send("arrayObjectInitialized", this);
         this.startCleanup();
     }
 }
@@ -54108,7 +54530,8 @@ class RuntimeClassDirectInitializer extends RuntimeDirectInitializer {
         }
         else {
             let target = this.model.target.runtimeLookup(this);
-            this.observable.send("initialized", target);
+            target.beginLifetime();
+            this.observable.send("classObjectInitialized", this);
             this.startCleanup();
         }
     }
@@ -54126,14 +54549,14 @@ class CtorInitializer extends constructs_1.BasicCPPConstruct {
         this.memberInitializersByName = {};
         let receiverType = context.contextualReceiverType;
         this.target = new entities_1.ReceiverEntity(receiverType);
-        let baseType = receiverType.classDefinition.baseClass;
+        let baseType = receiverType.classDefinition.baseType;
         util_1.assert(context.containingFunction.firstDeclaration.isConstructor);
         // Initial processing of ctor initializer components list
         for (let i = 0; i < components.length; ++i) {
             let comp = components[i];
             if (comp.kind === "delegatedConstructor") {
                 let delegatedCtor = comp.args.length === 0
-                    ? new ClassDefaultInitializer(context, this.target)
+                    ? new ClassValueInitializer(context, this.target)
                     : new ClassDirectInitializer(context, this.target, comp.args, "direct");
                 this.attach(delegatedCtor);
                 if (this.delegatedConstructorInitializer) {
@@ -54152,7 +54575,7 @@ class CtorInitializer extends constructs_1.BasicCPPConstruct {
                 // there wasn't a base class to match the name of the init against
                 util_1.assert(baseType);
                 let baseInit = comp.args.length === 0
-                    ? new ClassDefaultInitializer(context, new entities_1.BaseSubobjectEntity(this.target, baseType))
+                    ? new ClassValueInitializer(context, new entities_1.BaseSubobjectEntity(this.target, baseType))
                     : new ClassDirectInitializer(context, new entities_1.BaseSubobjectEntity(this.target, baseType), comp.args, "direct");
                 this.attach(baseInit);
                 if (!this.baseInitializer) {
@@ -54179,7 +54602,7 @@ class CtorInitializer extends constructs_1.BasicCPPConstruct {
                     }
                     if (!memInit) {
                         memInit = comp.args.length === 0
-                            ? DefaultInitializer.create(context, memEntity)
+                            ? ValueInitializer.create(context, memEntity)
                             : DirectInitializer.create(context, memEntity, comp.args, "direct");
                     }
                     this.attach(memInit);
@@ -54217,7 +54640,7 @@ class CtorInitializer extends constructs_1.BasicCPPConstruct {
     static createFromAST(ast, context) {
         return new CtorInitializer(context, ast, ast.initializers.map(memInitAST => {
             let receiverType = context.contextualReceiverType;
-            let baseType = receiverType.classDefinition.baseClass;
+            let baseType = receiverType.classDefinition.baseType;
             let memName = memInitAST.member.identifier;
             let args = memInitAST.args.map(argAST => expressions_1.createExpressionFromAST(argAST, context));
             if (memName === receiverType.className) {
@@ -54548,7 +54971,8 @@ class RuntimeArrayMemberInitializer extends RuntimeInitializer {
         }
         else {
             let target = this.model.target.runtimeLookup(this);
-            this.observable.send("initialized", target);
+            target.beginLifetime();
+            this.observable.send("arrayObjectInitialized", this);
             this.startCleanup();
         }
     }
@@ -54648,7 +55072,7 @@ class ArrayAggregateInitializer extends ListInitializer {
         this.explicitElemInitializers = args.map((arg, i) => DirectInitializer.create(context, new entities_1.ArraySubobjectEntity(target, i), [arg], "copy"));
         let remainingElemInits = [];
         for (let i = args.length; i < arraySize; ++i) {
-            remainingElemInits.push(DefaultInitializer.create(context, new entities_1.ArraySubobjectEntity(target, i)));
+            remainingElemInits.push(ValueInitializer.create(context, new entities_1.ArraySubobjectEntity(target, i)));
         }
         this.implicitElemInitializers = remainingElemInits;
         this.elemInitializers = [];
@@ -54687,7 +55111,7 @@ class RuntimeArrayAggregateInitializer extends RuntimeListInitializer {
         }
         else {
             let target = this.model.target.runtimeLookup(this);
-            this.observable.send("initialized", target);
+            this.observable.send("arrayObjectInitialized", this);
             this.startCleanup();
         }
     }
@@ -54997,6 +55421,7 @@ class RuntimeNewArrayExpression extends expressionBase_1.RuntimeExpression {
         }
     }
     upNextImpl() {
+        var _a;
         if (this.dynamicLengthExpression && !this.dynamicLengthExpression.isDone) {
             this.sim.push(this.dynamicLengthExpression);
             return;
@@ -55008,6 +55433,10 @@ class RuntimeNewArrayExpression extends expressionBase_1.RuntimeExpression {
             util_1.asMutable(this).nextElemToInit = this.allocatedObject.getArrayElemSubobject(this.elemInitIndex);
             this.sim.push(this.elementInitializers[this.elemInitIndex]);
             ++this.elemInitIndex;
+        }
+        else {
+            // All initializers must have finished
+            (_a = this.allocatedObject) === null || _a === void 0 ? void 0 : _a.beginLifetime();
         }
     }
     stepForwardImpl() {
@@ -55433,6 +55862,9 @@ class AtomicObjectData extends ObjectData {
     setRawValue(newValue, write) {
         this.memory.writeBytes(this.address, this.object.type.valueToBytes(newValue));
     }
+    zeroInitialize() {
+        this.setRawValue(0, false);
+    }
     kill() {
         // no subobjects, do nothing
     }
@@ -55464,6 +55896,9 @@ class ArrayObjectData extends ObjectData {
     getArrayElemSubobjects() {
         return this.elemObjects;
     }
+    numArrayElemSubobjects() {
+        return this.elemObjects.length;
+    }
     getValue() {
         return this.elemObjects.map((elemObj) => { return elemObj.getValue(); });
     }
@@ -55475,6 +55910,9 @@ class ArrayObjectData extends ObjectData {
     //         this.elemObjects[i].setValue(newValue[i], write);
     //     }
     // }
+    zeroInitialize() {
+        this.elemObjects.forEach(elemObj => elemObj.zeroInitialize());
+    }
     kill(rt) {
         this.elemObjects.forEach(elemObj => elemObj.kill(rt));
     }
@@ -55493,8 +55931,8 @@ class ClassObjectData extends ObjectData {
         //     return subObj;
         // });
         this.baseSubobjects = [];
-        if (classDef.baseClass) {
-            let baseObj = new BaseSubobject(this.object, classDef.baseClass, memory, subAddr);
+        if (classDef.baseType) {
+            let baseObj = new BaseSubobject(this.object, classDef.baseType, memory, subAddr);
             util_1.asMutable(this.baseSubobjects).push(baseObj);
             subAddr += baseObj.size;
         }
@@ -55541,6 +55979,9 @@ class ClassObjectData extends ObjectData {
     rawValue() {
         throw new Error("Not implemented");
     }
+    zeroInitialize() {
+        this.subobjects.forEach(subobj => subobj.zeroInitialize());
+    }
     kill(rt) {
         this.subobjects.forEach(subobj => subobj.kill(rt));
     }
@@ -55566,7 +56007,9 @@ class CPPObject {
             this.data = new AtomicObjectData(this, memory, address);
         }
         this.address = address;
-        this.isAlive = true;
+        // Object is not alive until it is initialized
+        this.isAlive = false;
+        // Validity is determined by the data this object currently holds
         this._isValid = false;
     }
     // Only allowed if receiver matches CPPObject<ArrayType<Elem_type>>
@@ -55576,6 +56019,10 @@ class CPPObject {
     // Only allowed if receiver matches CPPObject<ArrayType<Elem_type>>
     getArrayElemSubobjects() {
         return this.data.getArrayElemSubobjects();
+    }
+    // Only allowed if receiver matches CPPObject<ArrayType<Elem_type>>
+    numArrayElemSubobjects() {
+        return this.data.numArrayElemSubobjects();
     }
     // Only allowed if receiver matches CPPObject<ArrayType<Elem_type>>
     getArrayElemSubobjectByAddress(address) {
@@ -55604,6 +56051,10 @@ class CPPObject {
     }
     toString() {
         return "@" + this.address;
+    }
+    beginLifetime() {
+        util_1.assert(!this.isAlive);
+        util_1.asMutable(this).isAlive = true;
     }
     kill(rt) {
         // kill subobjects
@@ -55650,6 +56101,20 @@ class CPPObject {
     }
     writeValue(newValue) {
         this.setValue(newValue, true);
+    }
+    /**
+     * Begins this object's lifetime and initializes its value.
+     * May only be called on objects of atomic type.
+     * @param this
+     * @param newValue
+     */
+    initializeValue(newValue) {
+        this.beginLifetime();
+        this.writeValue(newValue);
+    }
+    zeroInitialize() {
+        this.data.zeroInitialize();
+        this.setValidity(true);
     }
     isValueValid() {
         return this._isValid && this.type.isValueValid(this.rawValue());
@@ -56776,9 +57241,10 @@ class MemoryFrame {
     localObjectLookup(entity) {
         return this.localObjectsByEntityId[entity.entityId];
     }
-    initializeLocalObject(entity, newValue) {
-        this.localObjectLookup(entity).writeValue(newValue);
-    }
+    // TODO: apparently this is not used
+    // public initializeLocalObject<T extends AtomicType>(entity: LocalObjectEntity<T>, newValue: Value<T>) {
+    //     this.localObjectLookup(entity).writeValue(newValue);
+    // }
     localReferenceLookup(entity) {
         return this.localReferencesByEntityId[entity.entityId];
     }
@@ -57193,7 +57659,7 @@ exports.synchronousCloneSimulation = synchronousCloneSimulation;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RuntimeForStatement = exports.ForStatement = exports.RuntimeWhileStatement = exports.WhileStatement = exports.RuntimeIfStatement = exports.IfStatement = exports.RuntimeLocalDeallocator = exports.LocalDeallocator = exports.RuntimeBlock = exports.Block = exports.RuntimeReturnStatement = exports.ReturnStatement = exports.RuntimeBreakStatement = exports.BreakStatement = exports.RuntimeDeclarationStatement = exports.DeclarationStatement = exports.RuntimeNullStatement = exports.NullStatement = exports.RuntimeExpressionStatement = exports.ExpressionStatement = exports.UnsupportedStatement = exports.RuntimeStatement = exports.Statement = exports.createRuntimeStatement = exports.createStatementFromAST = void 0;
+exports.RuntimeForStatement = exports.ForStatement = exports.RuntimeWhileStatement = exports.WhileStatement = exports.RuntimeIfStatement = exports.IfStatement = exports.RuntimeBlock = exports.Block = exports.RuntimeReturnStatement = exports.ReturnStatement = exports.RuntimeBreakStatement = exports.BreakStatement = exports.RuntimeDeclarationStatement = exports.DeclarationStatement = exports.RuntimeNullStatement = exports.NullStatement = exports.RuntimeExpressionStatement = exports.ExpressionStatement = exports.UnsupportedStatement = exports.RuntimeStatement = exports.Statement = exports.createRuntimeStatement = exports.createStatementFromAST = void 0;
 const constructs_1 = __webpack_require__(4293);
 const errors_1 = __webpack_require__(5244);
 const expressions_1 = __webpack_require__(6597);
@@ -57205,7 +57671,7 @@ const util_1 = __webpack_require__(6560);
 const codeOutlets_1 = __webpack_require__(3004);
 const functions_1 = __webpack_require__(2367);
 const predicates_1 = __webpack_require__(941);
-const FunctionCall_1 = __webpack_require__(20);
+const ObjectDeallocator_1 = __webpack_require__(4822);
 const StatementConstructsMap = {
     "labeled_statement": (ast, context) => new UnsupportedStatement(context, ast, "labeled statement"),
     "block": (ast, context) => Block.createFromAST(ast, context),
@@ -57510,7 +57976,7 @@ class Block extends Statement {
         this.construct_type = "block";
         this.statements = [];
         this.attachAll(this.statements = statements);
-        this.attach(this.localDeallocator = new LocalDeallocator(context));
+        this.attach(this.localDeallocator = ObjectDeallocator_1.createLocalDeallocator(context));
     }
     static createFromAST(ast, context) {
         let blockContext = constructs_1.createBlockContext(context);
@@ -57545,79 +58011,169 @@ class RuntimeBlock extends RuntimeStatement {
     }
 }
 exports.RuntimeBlock = RuntimeBlock;
-class LocalDeallocator extends constructs_1.BasicCPPConstruct {
-    constructor(context) {
-        super(context, undefined); // Has no AST
-        this.construct_type = "LocalDeallocator";
-        let localVariables = context.blockLocals.localVariables;
-        this.dtors = localVariables.map((local) => {
-            if (local.variableKind === "object" && local.isTyped(types_1.isCompleteClassType)) {
-                let dtor = local.type.classDefinition.destructor;
-                if (dtor) {
-                    let dtorCall = new FunctionCall_1.FunctionCall(context, dtor, [], local.type);
-                    this.attach(dtorCall);
-                    return dtorCall;
-                }
-                else {
-                    this.addNote(errors_1.CPPError.declaration.dtor.no_destructor_local(local.firstDeclaration, local));
-                }
-            }
-            return undefined;
-        });
-    }
-    createRuntimeConstruct(parent) {
-        return new RuntimeLocalDeallocator(this, parent);
-    }
-}
-exports.LocalDeallocator = LocalDeallocator;
-class RuntimeLocalDeallocator extends constructs_1.RuntimeConstruct {
-    constructor(model, parent) {
-        super(model, "expression", parent);
-        this.justDestructed = undefined;
-        this.index = this.model.context.blockLocals.localVariables.length - 1;
-    }
-    upNextImpl() {
-        if (this.justDestructed) {
-            this.sim.memory.killObject(this.justDestructed, this);
-            this.justDestructed = undefined;
-        }
-    }
-    stepForwardImpl() {
-        var _a;
-        let locals = this.model.context.blockLocals.localVariables;
-        while (this.index >= 0) {
-            // Destroy local at given index
-            let local = locals[this.index];
-            let dtor = this.model.dtors[this.index];
-            --this.index;
-            if (local.variableKind === "reference") {
-                // If the program is running, and this reference was bound
-                // to some object, the referred type should have
-                // been completed.
-                util_1.assert(local.isTyped(types_1.isReferenceToCompleteType));
-                // destroying a reference doesn't really require doing anything,
-                // but we notify the referred object this reference has been removed
-                (_a = local.runtimeLookup(this)) === null || _a === void 0 ? void 0 : _a.onReferenceUnbound(local);
-            }
-            else if (local.isTyped(types_1.isCompleteClassType)) {
-                // a local class-type object, so we call the dtor
-                util_1.assert(dtor);
-                let obj = local.runtimeLookup(this);
-                this.sim.push(dtor.createRuntimeFunctionCall(this, obj));
-                // need to destroy the object once dtor is done, so we keep track of it here
-                this.justDestructed = obj;
-                // return so that the dtor, which is now on top of the stack, can run instead
-                return;
-            }
-            else {
-                // a local non-class-type object, no dtor needed.
-                this.sim.memory.killObject(local.runtimeLookup(this), this);
-            }
-        }
-        this.startCleanup();
-    }
-}
-exports.RuntimeLocalDeallocator = RuntimeLocalDeallocator;
+// export class ArrayDeallocator extends BasicCPPConstruct<TranslationUnitContext, ASTNode> {
+//     public readonly construct_type = "ArrayDeallocator";
+//     public readonly target: ObjectEntity<BoundedArrayType>;
+//     public readonly dtor?: FunctionCall;
+//     public constructor(context: TranslationUnitContext, target: ObjectEntity<BoundedArrayType>) {
+//         super(context, undefined); // Has no AST
+//         this.target = target;
+//         if (target.type.elemType.isCompleteClassType()) {
+//             let dtorFn = target.type.elemType.classDefinition.destructor;
+//             if (dtorFn) {
+//                 this.attach(this.dtor = new FunctionCall(context, dtorFn, [], target.type.elemType));
+//             }
+//             else {
+//                 this.addNote(CPPError.declaration.dtor.no_destructor_array(this, target));
+//             }
+//         }
+//     }
+//     public createRuntimeConstruct(this: CompiledArrayDeallocator, parent: RuntimeConstruct) {
+//         return new RuntimeArrayDeallocator(this, parent);
+//     }
+//     // public isTailChild(child: ExecutableConstruct) {
+//     //     return {isTail: true};
+//     // }
+// }
+// export interface CompiledArrayDeallocator extends ArrayDeallocator, SuccessfullyCompiled {
+//     readonly dtor?: CompiledFunctionCall;
+// }
+// export class RuntimeArrayDeallocator extends RuntimeConstruct<CompiledArrayDeallocator> {
+//     private index?: number;
+//     private target?: CPPObject<BoundedArrayType>;
+//     private justDestructed: ArraySubobject<CompleteClassType> | undefined = undefined;
+//     public readonly parent!: RuntimeBlock | RuntimeForStatement; // narrows type from base class
+//     public constructor(model: CompiledArrayDeallocator, parent: RuntimeConstruct) {
+//         super(model, "cleanup", parent);
+//     }
+//     protected upNextImpl() {
+//         if (this.justDestructed) {
+//             this.sim.memory.killObject(this.justDestructed, this);
+//             this.justDestructed = undefined;
+//         }
+//     }
+//     public stepForwardImpl() {
+//         if (!this.target) {
+//             this.target = this.model.target.runtimeLookup(this);
+//             // Find the index of the last allocated object still alive
+//             let index = this.target.numArrayElemSubobjects() - 1;
+//             while(!this.target.getArrayElemSubobject(index).isAlive) {
+//                 --index;
+//             }
+//             this.index = index;
+//         }
+//         let locals = this.model.context.blockLocals.localVariables;
+//         while(this.index >= 0) {
+//             // Destroy local at given index
+//             let local = locals[this.index];
+//             let dtor = this.model.dtors[this.index];
+//             --this.index;
+//             if (local.variableKind === "reference") {
+//                 // If the program is running, and this reference was bound
+//                 // to some object, the referred type should have
+//                 // been completed.
+//                 assert(local.isTyped(isReferenceToCompleteType));
+//                 // destroying a reference doesn't really require doing anything,
+//                 // but we notify the referred object this reference has been removed
+//                 local.runtimeLookup(this)?.onReferenceUnbound(local);
+//             }
+//             else if (local.isTyped(isCompleteClassType)) {
+//                 // a local class-type object, so we call the dtor
+//                 assert(dtor);
+//                 let obj = local.runtimeLookup(this);
+//                 this.sim.push(dtor.createRuntimeFunctionCall(this, obj));
+//                 // need to destroy the object once dtor is done, so we keep track of it here
+//                 this.justDestructed = obj;
+//                 // return so that the dtor, which is now on top of the stack, can run instead
+//                 return;
+//             }
+//             else {
+//                 // a local non-class-type object, no dtor needed.
+//                 this.sim.memory.killObject(local.runtimeLookup(this), this);
+//             }
+//         }
+//         this.startCleanup();
+//     }
+// }
+// export class StaticDeallocator extends BasicCPPConstruct<BlockContext, ASTNode> {
+//     public readonly construct_type = "StaticDeallocator";
+//     public readonly dtors: (FunctionCall | undefined)[];
+//     public constructor(context: BlockContext) {
+//         super(context, undefined); // Has no AST
+//         let staticVariables = context.blockLocals.staticVariables;
+//         this.dtors = staticVariables.map((stat) => {
+//             if (stat.variableKind === "object" && stat.isTyped(isCompleteClassType)) {
+//                 let dtor = stat.type.classDefinition.destructor;
+//                 if (dtor) {
+//                     let dtorCall = new FunctionCall(context, dtor, [], stat.type);
+//                     this.attach(dtorCall);
+//                     return dtorCall;
+//                 }
+//                 else{
+//                     this.addNote(CPPError.declaration.dtor.no_destructor_static(stat.firstDeclaration, stat));
+//                 }
+//             }
+//             return undefined;
+//         });
+//     }
+//     public createRuntimeConstruct(this: CompiledStaticDeallocator, parent: RuntimeBlock | RuntimeForStatement) {
+//         return new RuntimeStaticDeallocator(this, parent);
+//     }
+//     // public isTailChild(child: ExecutableConstruct) {
+//     //     return {isTail: true};
+//     // }
+// }
+// export interface CompiledStaticDeallocator extends StaticDeallocator, SuccessfullyCompiled {
+//     readonly dtors: (CompiledFunctionCall | undefined)[];
+// }
+// export class RuntimeStaticDeallocator extends RuntimeConstruct<CompiledStaticDeallocator> {
+//     private index;
+//     private justDestructed: AutoObject<CompleteClassType> | undefined = undefined;
+//     public readonly parent!: RuntimeBlock | RuntimeForStatement; // narrows type from base class
+//     public constructor(model: CompiledStaticDeallocator, parent: RuntimeBlock | RuntimeForStatement) {
+//         super(model, "expression", parent);
+//         this.index = this.model.context.blockLocals.localVariables.length - 1;
+//     }
+//     protected upNextImpl() {
+//         if (this.justDestructed) {
+//             this.sim.memory.killObject(this.justDestructed, this);
+//             this.justDestructed = undefined;
+//         }
+//     }
+//     public stepForwardImpl() {
+//         let locals = this.model.context.blockLocals.localVariables;
+//         while(this.index >= 0) {
+//             // Destroy local at given index
+//             let local = locals[this.index];
+//             let dtor = this.model.dtors[this.index];
+//             --this.index;
+//             if (local.variableKind === "reference") {
+//                 // If the program is running, and this reference was bound
+//                 // to some object, the referred type should have
+//                 // been completed.
+//                 assert(local.isTyped(isReferenceToCompleteType));
+//                 // destroying a reference doesn't really require doing anything,
+//                 // but we notify the referred object this reference has been removed
+//                 local.runtimeLookup(this)?.onReferenceUnbound(local);
+//             }
+//             else if (local.isTyped(isCompleteClassType)) {
+//                 // a local class-type object, so we call the dtor
+//                 assert(dtor);
+//                 let obj = local.runtimeLookup(this);
+//                 this.sim.push(dtor.createRuntimeFunctionCall(this, obj));
+//                 // need to destroy the object once dtor is done, so we keep track of it here
+//                 this.justDestructed = obj;
+//                 // return so that the dtor, which is now on top of the stack, can run instead
+//                 return;
+//             }
+//             else {
+//                 // a local non-class-type object, no dtor needed.
+//                 this.sim.memory.killObject(local.runtimeLookup(this), this);
+//             }
+//         }
+//         this.startCleanup();
+//     }
+// }
 // export class OpaqueStatement extends StatementBase implements SuccessfullyCompiled {
 //     public _t_isCompiled: never;
 //     private readonly effects: (rtBlock: RuntimeOpaqueStatement) => void;
@@ -57834,7 +58390,7 @@ class ForStatement extends Statement {
         if (post) {
             this.attach(this.post = post);
         }
-        this.attach(this.localDeallocator = new LocalDeallocator(context));
+        this.attach(this.localDeallocator = ObjectDeallocator_1.createLocalDeallocator(context));
     }
     // The constructor above poses a conundrum. It asks that
     // we pass in fully instantiated, ready-to-go child constructs
@@ -59032,12 +59588,12 @@ class ClassTypeBase extends TypeBase {
     }
     isDerivedFrom(other) {
         var _a, _b;
-        var b = (_a = this.classDefinition) === null || _a === void 0 ? void 0 : _a.baseClass;
+        var b = (_a = this.classDefinition) === null || _a === void 0 ? void 0 : _a.baseType;
         while (b) {
             if (similarType(other, b)) {
                 return true;
             }
-            b = (_b = b.classDefinition) === null || _b === void 0 ? void 0 : _b.baseClass;
+            b = (_b = b.classDefinition) === null || _b === void 0 ? void 0 : _b.baseType;
         }
         return false;
     }
@@ -59084,7 +59640,7 @@ class ClassTypeBase extends TypeBase {
             return false;
         }
         // Aggregates may not have base classes (until c++17)
-        if (this.classDefinition.baseClass) {
+        if (this.classDefinition.baseType) {
             return false;
         }
         return true;
@@ -61696,7 +62252,7 @@ opaqueExpression_1.registerOpaqueExpression("string::operator+=_char", {
         let c = opaqueExpression_1.getLocal(rt, "c");
         let orig = extractCharsFromCString(rt, getDataPtr(rt.contextualReceiver).getValue());
         rt.sim.memory.heap.deleteByAddress(getDataPtr(rec).getValue().rawValue);
-        copyFromCString(rt, rt.contextualReceiver, [...orig.charValues, c.getValue(), types_1.Char.NULL_CHAR], orig.validLength);
+        copyFromCString(rt, rt.contextualReceiver, [...orig.charValues.slice(0, -1), c.getValue(), types_1.Char.NULL_CHAR], orig.validLength);
         return rt.contextualReceiver;
     }
 });
@@ -61731,7 +62287,8 @@ opaqueExpression_1.registerOpaqueExpression("stod", {
 function allocateNewArray(rt, rec, newCapacity, values) {
     let arrObj = rt.sim.memory.heap.allocateNewObject(new types_1.BoundedArrayType(types_1.Char.CHAR, newCapacity));
     let arrElems = arrObj.getArrayElemSubobjects();
-    values.forEach((val, i) => arrElems[i].writeValue(val));
+    arrElems.forEach((elem, i) => i < values.length ? elem.initializeValue(values[i]) : elem.beginLifetime());
+    arrObj.beginLifetime();
     // store pointer to new array
     getDataPtr(rec).writeValue(arrElems[0].getPointerTo());
     return arrElems;
@@ -62241,6 +62798,8 @@ exports.getDataPtr = getDataPtr;
 function allocateNewArray(rt, rec, newCapacity) {
     let elt_type = getDataPtr(rec).type.ptrTo.cvUnqualified();
     let arrObj = rt.sim.memory.heap.allocateNewObject(new types_1.BoundedArrayType(elt_type, newCapacity.rawValue));
+    arrObj.getArrayElemSubobjects().forEach(elem => elem.beginLifetime());
+    arrObj.beginLifetime();
     // store pointer to new array
     getDataPtr(rec).writeValue(arrObj.getArrayElemSubobject(0).getPointerTo());
     getCapacity(rec).writeValue(newCapacity);
@@ -77736,8 +78295,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.NewArrayExpressionOutlet = exports.NewExpressionOutlet = exports.UnaryOperatorExpressionOutlet = exports.InputOperatorExpressionOutlet = exports.OutputOperatorExpressionOutlet = exports.BinaryOperatorExpressionOutlet = exports.MemberOperatorOverloadExpressionOutlet = exports.NonMemberOperatorOverloadExpressionOutlet = exports.MagicFunctionCallExpressionOutlet = exports.ArgumentInitializerOutlet = exports.FunctionCallOutlet = exports.FunctionCallExpressionOutlet = exports.CommaExpressionOutlet = exports.TernaryExpressionOutlet = exports.CompoundAssignmentExpressionOutlet = exports.AssignmentExpressionOutlet = exports.ExpressionOutlet = exports.ArrayMemberInitializerOutlet = exports.ArrayAggregateInitializerOutlet = exports.ClassCopyInitializerOutlet = exports.ReferenceCopyInitializerOutlet = exports.AtomicCopyInitializerOutlet = exports.CopyInitializerOutlet = exports.ClassDirectInitializerOutlet = exports.ArrayDirectInitializerOutlet = exports.ReferenceDirectInitializerOutlet = exports.AtomicDirectInitializerOutlet = exports.ClassDefaultInitializerOutlet = exports.ArrayDefaultInitializerOutlet = exports.AtomicDefaultInitializerOutlet = exports.InitializerOutlet = exports.ReturnInitializerOutlet = exports.ReturnStatementOutlet = exports.BreakStatementOutlet = exports.ForStatementOutlet = exports.WhileStatementOutlet = exports.IfStatementOutlet = exports.NullStatementOutlet = exports.ExpressionStatementOutlet = exports.DeclarationStatementOutlet = exports.StatementOutlet = exports.BlockOutlet = exports.CtorInitializerOutlet = exports.ParameterOutlet = exports.FunctionOutlet = exports.PotentialFullExpressionOutlet = exports.ConstructOutlet = exports.cstringToString = exports.getValueString = exports.CODE_ANIMATIONS = void 0;
-exports.addChildStatementOutlet = exports.addChildInitializerOutlet = exports.addChildExpressionOutlet = exports.createStatementOutlet = exports.createInitializerOutlet = exports.createExpressionOutlet = exports.QualificationConversionOutlet = exports.StreamToBoolOutlet = exports.ArrayToPointerOutlet = exports.LValueToRValueOutlet = exports.TypeConversionOutlet = exports.ThisExpressionOutlet = exports.OpaqueExpressionOutlet = exports.StringLiteralExpressionOutlet = exports.NumericLiteralOutlet = exports.IdentifierOutlet = exports.InitializerListOutlet = exports.ParenthesesOutlet = exports.ArrowExpressionOutlet = exports.DotExpressionOutlet = exports.SubscriptExpressionOutlet = exports.PostfixIncrementExpressionOutlet = exports.DeleteArrayExpressionOutlet = exports.DeleteExpressionOutlet = void 0;
+exports.InputOperatorExpressionOutlet = exports.OutputOperatorExpressionOutlet = exports.BinaryOperatorExpressionOutlet = exports.MemberOperatorOverloadExpressionOutlet = exports.NonMemberOperatorOverloadExpressionOutlet = exports.MagicFunctionCallExpressionOutlet = exports.ArgumentInitializerOutlet = exports.FunctionCallOutlet = exports.FunctionCallExpressionOutlet = exports.CommaExpressionOutlet = exports.TernaryExpressionOutlet = exports.CompoundAssignmentExpressionOutlet = exports.AssignmentExpressionOutlet = exports.ExpressionOutlet = exports.ArrayMemberInitializerOutlet = exports.ArrayAggregateInitializerOutlet = exports.ClassCopyInitializerOutlet = exports.ReferenceCopyInitializerOutlet = exports.AtomicCopyInitializerOutlet = exports.CopyInitializerOutlet = exports.ClassDirectInitializerOutlet = exports.ArrayDirectInitializerOutlet = exports.ReferenceDirectInitializerOutlet = exports.AtomicDirectInitializerOutlet = exports.ClassValueInitializerOutlet = exports.ArrayValueInitializerOutlet = exports.AtomicValueInitializerOutlet = exports.ClassDefaultInitializerOutlet = exports.ArrayDefaultInitializerOutlet = exports.AtomicDefaultInitializerOutlet = exports.InitializerOutlet = exports.ReturnInitializerOutlet = exports.ReturnStatementOutlet = exports.BreakStatementOutlet = exports.ForStatementOutlet = exports.WhileStatementOutlet = exports.IfStatementOutlet = exports.NullStatementOutlet = exports.ExpressionStatementOutlet = exports.DeclarationStatementOutlet = exports.StatementOutlet = exports.BlockOutlet = exports.CtorInitializerOutlet = exports.ParameterOutlet = exports.FunctionOutlet = exports.PotentialFullExpressionOutlet = exports.ConstructOutlet = exports.cstringToString = exports.getValueString = exports.CODE_ANIMATIONS = void 0;
+exports.addChildStatementOutlet = exports.addChildInitializerOutlet = exports.addChildExpressionOutlet = exports.createStatementOutlet = exports.createInitializerOutlet = exports.createExpressionOutlet = exports.QualificationConversionOutlet = exports.StreamToBoolOutlet = exports.ArrayToPointerOutlet = exports.LValueToRValueOutlet = exports.TypeConversionOutlet = exports.ThisExpressionOutlet = exports.OpaqueExpressionOutlet = exports.StringLiteralExpressionOutlet = exports.NumericLiteralOutlet = exports.IdentifierOutlet = exports.InitializerListOutlet = exports.ParenthesesOutlet = exports.ArrowExpressionOutlet = exports.DotExpressionOutlet = exports.SubscriptExpressionOutlet = exports.PostfixIncrementExpressionOutlet = exports.DeleteArrayExpressionOutlet = exports.DeleteExpressionOutlet = exports.NewArrayExpressionOutlet = exports.NewExpressionOutlet = exports.UnaryOperatorExpressionOutlet = void 0;
 const util_1 = __webpack_require__(6560);
 const observe_1 = __webpack_require__(5114);
 const declarations_1 = __webpack_require__(8963);
@@ -78276,14 +78835,29 @@ class DeclarationStatementOutlet extends StatementOutlet {
                     case "list":
                         declarationElem.append(" = { ");
                         break;
+                    case "value":
+                        declarationElem.append("{");
+                        break;
+                    case "default": break;
+                    default:
+                        util_1.assertNever(declaration.initializer.kind);
+                        break;
                 }
                 util_1.asMutable(this.initializerOutlets).push(createInitializerOutlet($("<span></span>").appendTo(declarationElem), declaration.initializer, this));
                 switch (declaration.initializer.kind) {
                     case "direct":
                         declarationElem.append(")");
                         break;
+                    case "copy": break;
                     case "list":
                         declarationElem.append(" }");
+                        break;
+                    case "value":
+                        declarationElem.append("}");
+                        break;
+                    case "default": break;
+                    default:
+                        util_1.assertNever(declaration.initializer.kind);
                         break;
                 }
             }
@@ -78541,6 +79115,25 @@ class ClassDefaultInitializerOutlet extends InitializerOutlet {
     }
 }
 exports.ClassDefaultInitializerOutlet = ClassDefaultInitializerOutlet;
+class AtomicValueInitializerOutlet extends InitializerOutlet {
+}
+exports.AtomicValueInitializerOutlet = AtomicValueInitializerOutlet;
+class ArrayValueInitializerOutlet extends InitializerOutlet {
+    constructor(element, construct, parent) {
+        super(element, construct, parent);
+        if (this.construct.elementInitializers) {
+            this.elementInitializerOutlets = this.construct.elementInitializers.map(elemInit => createInitializerOutlet(element, elemInit, this));
+        }
+    }
+}
+exports.ArrayValueInitializerOutlet = ArrayValueInitializerOutlet;
+class ClassValueInitializerOutlet extends InitializerOutlet {
+    constructor(element, construct, parent) {
+        super(element, construct, parent);
+        this.ctorCallOutlet = new FunctionCallOutlet($("<span></span>").appendTo(this.element), construct.ctorCall, this);
+    }
+}
+exports.ClassValueInitializerOutlet = ClassValueInitializerOutlet;
 class AtomicDirectInitializerOutlet extends InitializerOutlet {
     constructor(element, construct, parent) {
         super(element, construct, parent);
@@ -79002,6 +79595,12 @@ class NewExpressionOutlet extends ExpressionOutlet {
                 case "list":
                     this.exprElem.append("{ ");
                     break;
+                case "value":
+                    this.exprElem.append("(");
+                    break;
+                case "default": break;
+                case "copy": break;
+                default: util_1.assertNever(this.construct.initializer.kind);
             }
             this.initializerOutlet = createInitializerOutlet($("<span></span>").appendTo(this.exprElem), this.construct.initializer, this);
             switch (this.construct.initializer.kind) {
@@ -79011,6 +79610,12 @@ class NewExpressionOutlet extends ExpressionOutlet {
                 case "list":
                     this.exprElem.append(" }");
                     break;
+                case "value":
+                    this.exprElem.append(")");
+                    break;
+                case "default": break;
+                case "copy": break;
+                default: util_1.assertNever(this.construct.initializer.kind);
             }
         }
     }
