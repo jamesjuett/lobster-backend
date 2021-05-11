@@ -42374,25 +42374,25 @@ function constructTest(constructClass) {
     return ((construct) => construct instanceof constructClass);
 }
 exports.constructTest = constructTest;
-function exploreConstructs(root, test, fn) {
+function exploreConstructs(root, test, fn, keepGoing = { b: true }) {
     if (root instanceof Program_1.Program) {
         for (let tuName in root.translationUnits) {
-            exploreConstructs(root.translationUnits[tuName], test, fn);
+            exploreConstructs(root.translationUnits[tuName], test, fn, keepGoing);
         }
         return;
     }
     if (root instanceof Program_1.TranslationUnit) {
-        root.topLevelDeclarations.forEach(decl => exploreConstructs(decl, test, fn));
+        root.topLevelDeclarations.forEach(decl => exploreConstructs(decl, test, fn, keepGoing));
         return;
     }
     if (Array.isArray(root)) {
-        root.forEach(r => exploreConstructs(r, test, fn));
+        root.forEach(r => exploreConstructs(r, test, fn, keepGoing));
         return;
     }
-    if (test(root)) {
-        fn(root);
+    if (keepGoing.b && test(root)) {
+        fn(root, () => { keepGoing.b = false; });
     }
-    root.children.forEach(child => exploreConstructs(child, test, fn));
+    root.children.forEach(child => exploreConstructs(child, test, fn, keepGoing));
 }
 exports.exploreConstructs = exploreConstructs;
 function findConstructs(root, test) {
@@ -42404,13 +42404,12 @@ function findConstructs(root, test) {
 }
 exports.findConstructs = findConstructs;
 function findFirstConstruct(root, test) {
-    let constructs = findConstructs(root, test);
-    if (constructs.length > 0) {
-        return constructs[0];
-    }
-    else {
-        return undefined;
-    }
+    let found;
+    exploreConstructs(root, test, (matchedConstruct, stop) => {
+        found = matchedConstruct;
+        stop();
+    });
+    return found;
 }
 exports.findFirstConstruct = findFirstConstruct;
 function containsConstruct(root, test) {
@@ -42778,6 +42777,54 @@ exports.findLoopControlVars = findLoopControlVars;
 
 /***/ }),
 
+/***/ 3222:
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.checkForNullptrEquivalence = exports.checkForZeroEquivalence = exports.assignmentEquivalence = void 0;
+const constructs_1 = __webpack_require__(4293);
+const expressions_1 = __webpack_require__(6597);
+const predicates_1 = __webpack_require__(941);
+function assignmentEquivalence(assn, compound, ec) {
+    let thisRhs = assn.rhs;
+    return constructs_1.areSemanticallyEquivalent(assn.lhs, compound.lhs, ec)
+        && predicates_1.Predicates.isBinaryOperatorExpression(thisRhs)
+        // Two possibilities:
+        //   Other's rhs is our rhs.left and compound's lhs is our rhs.right
+        //   OR compound's rhs is our rhs.right and compound's lhs is our rhs.left
+        && (constructs_1.areSemanticallyEquivalent(compound.rhs, thisRhs.left, ec) && constructs_1.areSemanticallyEquivalent(compound.lhs, thisRhs.right, ec)
+            || constructs_1.areSemanticallyEquivalent(compound.rhs, thisRhs.right, ec) && constructs_1.areSemanticallyEquivalent(compound.lhs, thisRhs.left, ec));
+}
+exports.assignmentEquivalence = assignmentEquivalence;
+function checkForZeroEquivalence(boolConv, rel, ec) {
+    if (rel.operator === "!=") {
+        if (constructs_1.areSemanticallyEquivalent(boolConv.from, rel.left, ec) && (isEquivalentToZero(rel.right)) ||
+            constructs_1.areSemanticallyEquivalent(boolConv.from, rel.right, ec) && (isEquivalentToZero(rel.left))) {
+            return true;
+        }
+    }
+    return false;
+}
+exports.checkForZeroEquivalence = checkForZeroEquivalence;
+function checkForNullptrEquivalence(boolConv, rel, ec) {
+    if (rel.operator === "!=") {
+        if (constructs_1.areSemanticallyEquivalent(boolConv.from, rel.left, ec) && rel.right instanceof expressions_1.NullPointerConversion ||
+            constructs_1.areSemanticallyEquivalent(boolConv.from, rel.right, ec) && rel.left instanceof expressions_1.NullPointerConversion) {
+            return true;
+        }
+    }
+    return false;
+}
+exports.checkForNullptrEquivalence = checkForNullptrEquivalence;
+function isEquivalentToZero(expr) {
+    return expressions_1.isIntegerLiteralZero(expr) || expr.construct_type === "ImplicitConversion" && isEquivalentToZero(expr.from);
+}
+
+
+/***/ }),
+
 /***/ 3044:
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -42815,6 +42862,7 @@ exports.RuntimeFunctionCall = exports.INDEX_FUNCTION_CALL_RETURN = exports.INDEX
 const entities_1 = __webpack_require__(8397);
 const util_1 = __webpack_require__(6560);
 const types_1 = __webpack_require__(8716);
+const constructs_1 = __webpack_require__(4293);
 const errors_1 = __webpack_require__(5244);
 const initializers_1 = __webpack_require__(1288);
 const PotentialFullExpression_1 = __webpack_require__(2593);
@@ -42952,6 +43000,11 @@ class FunctionCall extends PotentialFullExpression_1.PotentialFullExpression {
     }
     isReturnVoid() {
         return this.func.type.returnType.isVoidType();
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && entities_1.areEntitiesSemanticallyEquivalent(this.func, other.func, equivalenceContext)
+            && constructs_1.areAllSemanticallyEquivalent(this.args, other.args, equivalenceContext);
     }
 }
 exports.FunctionCall = FunctionCall;
@@ -43104,6 +43157,11 @@ class FunctionCallExpression extends expressionBase_1.Expression {
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
     }
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areSemanticallyEquivalent(this.operand, other.operand, ec)
+            && constructs_1.areAllSemanticallyEquivalent(this.originalArgs, other.originalArgs, ec);
+    }
 }
 exports.FunctionCallExpression = FunctionCallExpression;
 exports.INDEX_FUNCTION_CALL_EXPRESSION_OPERAND = 0;
@@ -43212,6 +43270,10 @@ class ObjectDeallocator extends constructs_1.BasicCPPConstruct {
     }
     addNoDestructorNote(obj) {
         this.addNote(errors_1.CPPError.declaration.dtor.no_destructor(this, obj));
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+        // TODO semantic equivalence
     }
 }
 exports.ObjectDeallocator = ObjectDeallocator;
@@ -43452,6 +43514,10 @@ class TemporaryDeallocator extends constructs_1.BasicCPPConstruct {
     createRuntimeConstruct(parent) {
         return new RuntimeTemporaryDeallocator(this, parent);
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+        // TODO semantic equivalence
+    }
 }
 exports.TemporaryDeallocator = TemporaryDeallocator;
 class RuntimeTemporaryDeallocator extends constructs_1.RuntimeConstruct {
@@ -43475,6 +43541,11 @@ class RuntimeTemporaryDeallocator extends constructs_1.RuntimeConstruct {
                 // a temp class-type object, so we call the dtor
                 util_1.assert(dtor);
                 let obj = temp.runtimeLookup(this.parent);
+                if (!obj) {
+                    // some obscure cases (e.g. non-evaluated operand of ternary operator)
+                    // where the temporary object might not ever have been allocated
+                    continue;
+                }
                 this.sim.push(dtor.createRuntimeFunctionCall(this, obj));
                 // need to destroy the object once dtor is done, so we keep track of it here
                 this.justDestructed = obj;
@@ -43482,8 +43553,14 @@ class RuntimeTemporaryDeallocator extends constructs_1.RuntimeConstruct {
                 return;
             }
             else {
+                let obj = temp.runtimeLookup(this.parent);
+                if (!obj) {
+                    // some obscure cases (e.g. non-evaluated operand of ternary operator)
+                    // where the temporary object might not ever have been allocated
+                    return;
+                }
                 // a temp non-class-type object, no dtor needed.
-                this.sim.memory.deallocateTemporaryObject(temp.runtimeLookup(this.parent), this);
+                this.sim.memory.deallocateTemporaryObject(obj, this);
             }
         }
         this.startCleanup();
@@ -43502,7 +43579,7 @@ exports.RuntimeTemporaryDeallocator = RuntimeTemporaryDeallocator;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.registerLibraryHeader = exports.TranslationUnit = exports.SourceReference = exports.SourceFile = exports.Program = void 0;
+exports.registerLibraryHeader = exports.TranslationUnit = exports.SourceReference = exports.SourceFile = exports.SimpleProgram = exports.Program = void 0;
 const cpp_parser_1 = __webpack_require__(7413);
 const errors_1 = __webpack_require__(5244);
 const util_1 = __webpack_require__(6560);
@@ -43673,6 +43750,12 @@ class Program {
 }
 exports.Program = Program;
 ;
+class SimpleProgram extends Program {
+    constructor(source) {
+        super([new SourceFile("main.cpp", source)], new Set(["main.cpp"]));
+    }
+}
+exports.SimpleProgram = SimpleProgram;
 /**
  * A simple, immutable object that contains a filename and its text contents.
  * Because it is immutable, don't grab a reference to someone's source file
@@ -44270,8 +44353,9 @@ class Exercise {
         return __awaiter(this, void 0, void 0, function* () {
             util_1.assert(this.project);
             util_1.asMutable(this).checkpointEvaluationsFinished = this.checkpoints.map(c => false);
+            util_1.asMutable(this).checkpointCompletions = this.checkpoints.map(c => false);
             this.observable.send("allCheckpointEvaluationStarted", this);
-            this.checkpointCompletions = yield Promise.all(this.checkpoints.map((checkpoint, i) => __awaiter(this, void 0, void 0, function* () {
+            yield Promise.all(this.checkpoints.map((checkpoint, i) => __awaiter(this, void 0, void 0, function* () {
                 try {
                     let result = yield checkpoint.evaluate(this.project);
                     util_1.asMutable(this.checkpointEvaluationsFinished)[i] = true;
@@ -44353,6 +44437,7 @@ class Simulation {
             "crash": []
         };
         this.eventsOccurred = this._eventsOccurred;
+        this.hasAnyEventOccurred = false;
         options = Object.assign({}, options, DEFAULT_SIMULATION_OPTIONS);
         this.program = program;
         // TODO SimulationRunner this.speed = Simulation.MAX_SPEED;
@@ -44541,8 +44626,9 @@ class Simulation {
         }
     }
     atEndOfMain() {
-        var _a;
-        return ((_a = this.top()) === null || _a === void 0 ? void 0 : _a.model) === this.program.mainFunction;
+        var _a, _b;
+        return ((_a = this.top()) === null || _a === void 0 ? void 0 : _a.model) === this.program.mainFunction.body.localDeallocator
+            || ((_b = this.top()) === null || _b === void 0 ? void 0 : _b.model) === this.program.mainFunction;
     }
     // stepOver: function(options){
     //     var target = this.peek(function(inst){
@@ -44730,6 +44816,7 @@ class Simulation {
     }
     eventOccurred(event, message, showAlert = false) {
         this._eventsOccurred[event].push(message);
+        this.hasAnyEventOccurred = true;
         this.observable.send("eventOccurred", { event, message });
     }
     hasEventOccurred(event) {
@@ -44858,7 +44945,7 @@ exports.SimulationInputStream = SimulationInputStream;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RuntimeGlobalObjectAllocator = exports.GlobalObjectAllocator = exports.ContextualLocals = exports.InvalidConstruct = exports.BasicCPPConstruct = exports.RuntimeConstruct = exports.CPPConstruct = exports.createMemberSpecificationContext = exports.createOutOfLineFunctionDefinitionContext = exports.isMemberSpecificationContext = exports.createClassContext = exports.isClassContext = exports.createLoopContext = exports.isBlockContext = exports.isMemberBlockContext = exports.createBlockContext = exports.isMemberFunctionContext = exports.createFunctionContext = exports.isFunctionContext = exports.createExpressionContextWithReceiverType = exports.createExpressionContextWithParameterTypes = exports.createLibraryContext = exports.createTranslationUnitContext = exports.createImplicitContext = exports.EMPTY_SOURCE = void 0;
+exports.RuntimeGlobalObjectAllocator = exports.GlobalObjectAllocator = exports.ContextualLocals = exports.InvalidConstruct = exports.BasicCPPConstruct = exports.RuntimeConstruct = exports.CPPConstruct = exports.areSemanticallyEquivalent = exports.isAnythingConstruct = exports.areAllSemanticallyEquivalent = exports.createMemberSpecificationContext = exports.createOutOfLineFunctionDefinitionContext = exports.isMemberSpecificationContext = exports.createClassContext = exports.isClassContext = exports.createLoopContext = exports.isBlockContext = exports.isMemberBlockContext = exports.createBlockContext = exports.isMemberFunctionContext = exports.createFunctionContext = exports.isFunctionContext = exports.createExpressionContextWithReceiverType = exports.createExpressionContextWithParameterTypes = exports.createLibraryContext = exports.createTranslationUnitContext = exports.createImplicitContext = exports.EMPTY_SOURCE = void 0;
 const entities_1 = __webpack_require__(8397);
 const errors_1 = __webpack_require__(5244);
 const util_1 = __webpack_require__(6560);
@@ -44969,6 +45056,48 @@ function createMemberSpecificationContext(classContext, accessLevel) {
     });
 }
 exports.createMemberSpecificationContext = createMemberSpecificationContext;
+function areAllSemanticallyEquivalent(constructs, others, equivalenceContext) {
+    // Don't care about deallocators in semantic analysis
+    constructs = constructs.filter(c => c.construct_type !== "TemporaryDeallocator" && c.construct_type !== "LocalDeallocator");
+    others = others.filter(c => c.construct_type !== "TemporaryDeallocator" && c.construct_type !== "LocalDeallocator");
+    return all_equiv_helper(constructs, others, equivalenceContext);
+}
+exports.areAllSemanticallyEquivalent = areAllSemanticallyEquivalent;
+function all_equiv_helper(constructs, others, ec) {
+    if (constructs.length === 0 && others.length === 0) {
+        return true;
+    }
+    else if (constructs.length === 0) {
+        return others.every(o => isAnythingConstruct(o));
+    }
+    else if (others.length === 0) {
+        return constructs.every(c => isAnythingConstruct(c));
+    }
+    else {
+        return areSemanticallyEquivalent(constructs[0], others[0], ec) && all_equiv_helper(constructs.slice(1), others.slice(1), ec)
+            || isAnythingConstruct(constructs[0]) && all_equiv_helper(constructs.slice(1), others, ec)
+            || isAnythingConstruct(others[0]) && all_equiv_helper(constructs, others.slice(1), ec);
+    }
+}
+function isAnythingConstruct(construct) {
+    if ((construct === null || construct === void 0 ? void 0 : construct.construct_type) === "anything_construct") {
+        return true;
+    }
+    let ac = construct;
+    if ((ac === null || ac === void 0 ? void 0 : ac.construct_type) === "block" && ac.statements.length === 1 && isAnythingConstruct(ac.statements[0])) {
+        return true;
+    }
+    return false;
+}
+exports.isAnythingConstruct = isAnythingConstruct;
+function areSemanticallyEquivalent(construct, other, equivalenceContext) {
+    return !!(construct === other // also handles case of both undefined
+        || isAnythingConstruct(construct)
+        || isAnythingConstruct(other)
+        || construct && other && construct.isSemanticallyEquivalent(other, equivalenceContext)
+        || construct && other && other.isSemanticallyEquivalent(construct, equivalenceContext));
+}
+exports.areSemanticallyEquivalent = areSemanticallyEquivalent;
 class CPPConstruct {
     constructor(context, ast) {
         this.notes = new errors_1.NoteRecorder();
@@ -45056,6 +45185,18 @@ class CPPConstruct {
     // };
     isSuccessfullyCompiled() {
         return !this.getContainedNotes().hasErrors;
+    }
+    isSemanticallyEquivalent(other, equivalenceContext) {
+        return this.isSemanticallyEquivalent_impl(other, equivalenceContext);
+    }
+    ;
+    areChildrenSemanticallyEquivalent(other, equivalenceContext) {
+        return areAllSemanticallyEquivalent(this.children, other.children, equivalenceContext);
+    }
+    entitiesUsed() {
+        let ents = [];
+        this.children.forEach(c => c.entitiesUsed().forEach(e => ents.push(e)));
+        return ents;
     }
 }
 exports.CPPConstruct = CPPConstruct;
@@ -45225,6 +45366,11 @@ class InvalidConstruct extends BasicCPPConstruct {
         this.addNote(this.note = errorFn(this));
         children === null || children === void 0 ? void 0 : children.forEach(child => this.attach(child));
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && other.note.id === this.note.id
+            && this.areChildrenSemanticallyEquivalent(other, equivalenceContext);
+    }
 }
 exports.InvalidConstruct = InvalidConstruct;
 class ContextualLocals {
@@ -45320,6 +45466,13 @@ class GlobalObjectAllocator extends CPPConstruct {
     createRuntimeConstruct(sim) {
         return new RuntimeGlobalObjectAllocator(this, sim);
     }
+    // public isTailChild(child: ExecutableConstruct) {
+    //     return {isTail: true};
+    // }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && areAllSemanticallyEquivalent(this.globalObjects, other.globalObjects, equivalenceContext);
+    }
 }
 exports.GlobalObjectAllocator = GlobalObjectAllocator;
 class RuntimeGlobalObjectAllocator extends RuntimeConstruct {
@@ -45413,6 +45566,15 @@ class StorageSpecifier extends constructs_1.BasicCPPConstruct {
     static createFromAST(ast, context) {
         return new StorageSpecifier(context, ast);
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && this.register === other.register
+            && this.static === other.static
+            && this.thread_local === other.thread_local
+            && this.extern === other.extern
+            && this.mutable === other.mutable
+            && this.isEmpty === other.isEmpty;
+    }
 }
 exports.StorageSpecifier = StorageSpecifier;
 class TypeSpecifier extends constructs_1.BasicCPPConstruct {
@@ -45480,6 +45642,16 @@ class TypeSpecifier extends constructs_1.BasicCPPConstruct {
             return;
         }
         this.addNote(errors_1.CPPError.type.typeNotFound(this, this.typeName));
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && this.const === other.const
+            && this.volatile === other.volatile
+            && this.signed === other.signed
+            && this.unsigned === other.unsigned
+            && this.enum === other.enum
+            && this.typeName === other.typeName
+            && types_1.sameType(this.baseType, other.baseType);
     }
     static createFromAST(ast, context) {
         return new TypeSpecifier(context, ast);
@@ -45715,6 +45887,9 @@ class UnknownTypeDeclaration extends SimpleDeclaration {
             this.addNote(errors_1.CPPError.declaration.unknown_type(this));
         }
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+    }
 }
 exports.UnknownTypeDeclaration = UnknownTypeDeclaration;
 class VoidDeclaration extends SimpleDeclaration {
@@ -45724,17 +45899,23 @@ class VoidDeclaration extends SimpleDeclaration {
         this.type = types_1.VoidType.VOID;
         this.addNote(errors_1.CPPError.declaration.void_prohibited(this));
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+    }
 }
 exports.VoidDeclaration = VoidDeclaration;
 class TypedefDeclaration extends SimpleDeclaration {
     constructor(context, ast, typeSpec, storageSpec, declarator, otherSpecs) {
         super(context, ast, typeSpec, storageSpec, declarator, otherSpecs);
-        this.construct_type = "storage_specifier";
+        this.construct_type = "typedef_declaration";
         this.addNote(errors_1.CPPError.lobster.unsupported_feature(this, "typedef"));
         // ADD THIS BACK IN WHEN TYPEDEFS ARE SUPPORTED
         // if (this.storageSpecifier.numSpecs > 0 && this.isTypedef) {
         //     this.addNote(CPPError.declaration.storage.typedef(this, this.storageSpec.ast))
         // }
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
     }
 }
 exports.TypedefDeclaration = TypedefDeclaration;
@@ -45751,6 +45932,9 @@ class FriendDeclaration extends SimpleDeclaration {
             this.addNote(errors_1.CPPError.declaration.friend.virtual_prohibited(this));
         }
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+    }
 }
 exports.FriendDeclaration = FriendDeclaration;
 class UnknownBoundArrayDeclaration extends SimpleDeclaration {
@@ -45759,6 +45943,9 @@ class UnknownBoundArrayDeclaration extends SimpleDeclaration {
         this.construct_type = "unknown_array_bound_declaration";
         this.type = type;
         this.addNote(errors_1.CPPError.declaration.array.length_required(this));
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
     }
 }
 exports.UnknownBoundArrayDeclaration = UnknownBoundArrayDeclaration;
@@ -45859,6 +46046,20 @@ class FunctionDeclaration extends SimpleDeclaration {
         // }
         // this.checkOverloadSemantics();
     }
+    // checkOverloadSemantics : function(){
+    //     if (this.name === "operator=" || this.name === "operator()" || this.name === "operator[]"){
+    //         if (!this.isMemberFunction){
+    //             this.addNote(CPPError.declaration.func.op_member(this));
+    //         }
+    //     }
+    //     if (this.name === "operator[]" && this.params.length !== 1){
+    //         this.addNote(CPPError.declaration.func.op_subscript_one_param(this));
+    //     }
+    // },
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && this.declaredEntity.isSemanticallyEquivalent(other.declaredEntity, equivalenceContext);
+    }
 }
 exports.FunctionDeclaration = FunctionDeclaration;
 class VariableDefinitionBase extends SimpleDeclaration {
@@ -45889,6 +46090,14 @@ class VariableDefinitionBase extends SimpleDeclaration {
             return;
         }
         return this.setInitializer(init);
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return this.construct_type === other.construct_type && other instanceof VariableDefinitionBase
+            && entities_1.areEntitiesSemanticallyEquivalent(this.declaredEntity, other.declaredEntity, equivalenceContext)
+            && constructs_1.areSemanticallyEquivalent(this.initializer, other.initializer, equivalenceContext);
+    }
+    entitiesUsed() {
+        return [this.declaredEntity];
     }
 }
 // interface CompiledVariableDefinitionBase<ContextType extends TranslationUnitContext = TranslationUnitContext, T extends ObjectType | ReferenceType = ObjectType | ReferenceType> extends VariableDefinitionBase<ContextType>, SuccessfullyCompiled {
@@ -46015,6 +46224,10 @@ class ParameterDeclaration extends constructs_1.BasicCPPConstruct {
             this.addNote(entityOrError);
         }
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && entities_1.areEntitiesSemanticallyEquivalent(this.declaredEntity, other.declaredEntity, equivalenceContext);
+    }
 }
 exports.ParameterDeclaration = ParameterDeclaration;
 /**
@@ -46030,6 +46243,10 @@ class IncompleteTypeVariableDefinition extends SimpleDeclaration {
         this.construct_type = "incomplete_type_variable_definition";
         this.type = type;
         this.addNote(errors_1.CPPError.declaration.incomplete_type_definition_prohibited(this));
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && types_1.sameType(this.type, other.type);
     }
 }
 exports.IncompleteTypeVariableDefinition = IncompleteTypeVariableDefinition;
@@ -46059,6 +46276,10 @@ class Declarator extends constructs_1.BasicCPPConstruct {
             this.isOverride = true;
         }
         this.determineNameAndType(ast);
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && types_1.sameType(this.type, other.type);
     }
     static createFromAST(ast, context, baseType) {
         return new Declarator(context, ast, baseType);
@@ -46386,6 +46607,13 @@ class FunctionDefinition extends constructs_1.BasicCPPConstruct {
     createRuntimeFunction(parent, receiver) {
         return new functions_1.RuntimeFunction(this, parent.sim, parent, receiver);
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areSemanticallyEquivalent(this.declaration, other.declaration, equivalenceContext)
+            && constructs_1.areAllSemanticallyEquivalent(this.parameters, other.parameters, equivalenceContext)
+            && constructs_1.areSemanticallyEquivalent(this.ctorInitializer, other.ctorInitializer, equivalenceContext)
+            && constructs_1.areSemanticallyEquivalent(this.body, other.body, equivalenceContext);
+    }
 }
 exports.FunctionDefinition = FunctionDefinition;
 /**
@@ -46449,6 +46677,10 @@ class ClassDeclaration extends constructs_1.BasicCPPConstruct {
             this.addNote(entityOrError);
         }
         this.type = this.declaredEntity.type;
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+        // TODO: semantic equivalence
     }
 }
 exports.ClassDeclaration = ClassDeclaration;
@@ -46941,6 +47173,10 @@ class ClassDefinition extends constructs_1.BasicCPPConstruct {
     isSuccessfullyCompiled() {
         return super.isSuccessfullyCompiled();
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+        // TODO semantic equivalence
+    }
 }
 exports.ClassDefinition = ClassDefinition;
 class BaseSpecifier extends constructs_1.BasicCPPConstruct {
@@ -46970,6 +47206,12 @@ class BaseSpecifier extends constructs_1.BasicCPPConstruct {
         else {
             this.addNote(errors_1.CPPError.class_def.base_class_type(this));
         }
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && this.accessLevel === other.accessLevel
+            && this.virtual === other.virtual
+            && entities_1.areEntitiesSemanticallyEquivalent(this.baseEntity, other.baseEntity, equivalenceContext);
     }
     static createFromAST(ast, context, defaultAccessLevel) {
         return new BaseSpecifier(context, ast, defaultAccessLevel);
@@ -47001,6 +47243,10 @@ class MemberVariableDeclaration extends VariableDefinitionBase {
             this.addNote(errors_1.CPPError.lobster.unsupported_feature(this, "member variable initializers"));
         }
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+        // TODO semantic equivalence
+    }
 }
 exports.MemberVariableDeclaration = MemberVariableDeclaration;
 /**
@@ -47016,6 +47262,10 @@ class IncompleteTypeMemberVariableDeclaration extends SimpleDeclaration {
         this.construct_type = "incomplete_type_member_variable_declaration";
         this.type = type;
         this.addNote(errors_1.CPPError.declaration.member.incomplete_type_declaration_prohibited(this));
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && types_1.sameType(this.type, other.type);
     }
 }
 exports.IncompleteTypeMemberVariableDeclaration = IncompleteTypeMemberVariableDeclaration;
@@ -47361,7 +47611,7 @@ exports.FunctionDefinitionGroup = FunctionDefinitionGroup;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.selectOverloadedDefinition = exports.ClassEntity = exports.FunctionEntity = exports.TemporaryObjectEntity = exports.MemberReferenceEntity = exports.MemberObjectEntity = exports.MemberAccessEntity = exports.BaseSubobjectEntity = exports.DynamicLengthArrayNextElementEntity = exports.ArraySubobjectEntity = exports.NewArrayEntity = exports.NewObjectEntity = exports.ReceiverEntity = exports.PassByReferenceParameterEntity = exports.PassByValueParameterEntity = exports.ReturnByReferenceEntity = exports.ReturnObjectEntity = exports.GlobalObjectEntity = exports.LocalReferenceEntity = exports.LocalObjectEntity = exports.runtimeObjectLookup = exports.FunctionOverloadGroup = exports.NamedEntity = exports.CPPEntity = exports.ClassScope = exports.NamespaceScope = exports.NamedScope = exports.BlockScope = exports.Scope = void 0;
+exports.selectOverloadedDefinition = exports.ClassEntity = exports.FunctionEntity = exports.TemporaryObjectEntity = exports.MemberReferenceEntity = exports.MemberObjectEntity = exports.MemberAccessEntity = exports.BaseSubobjectEntity = exports.DynamicLengthArrayNextElementEntity = exports.ArraySubobjectEntity = exports.NewArrayEntity = exports.NewObjectEntity = exports.ReceiverEntity = exports.PassByReferenceParameterEntity = exports.PassByValueParameterEntity = exports.ReturnByReferenceEntity = exports.ReturnObjectEntity = exports.GlobalObjectEntity = exports.LocalReferenceEntity = exports.LocalObjectEntity = exports.runtimeObjectLookup = exports.FunctionOverloadGroup = exports.NamedEntity = exports.areEntitiesSemanticallyEquivalent = exports.CPPEntity = exports.ClassScope = exports.NamespaceScope = exports.NamedScope = exports.BlockScope = exports.Scope = void 0;
 const types_1 = __webpack_require__(8716);
 const util_1 = __webpack_require__(6560);
 const observe_1 = __webpack_require__(5114);
@@ -47723,9 +47973,27 @@ class CPPEntity {
         this.entityId = CPPEntity._nextEntityId++;
         this.type = type;
     }
+    // // TODO: does this belong here?
+    // public isLibraryConstruct() {
+    //     return false
+    // }
+    // // TODO: does this belong here?
+    // public isLibraryUnsupported() {
+    //     return false;
+    // }
+    //TODO: function for isOdrUsed()?
+    isSemanticallyEquivalent(other, equivalenceContext) {
+        return types_1.sameType(other.type, this.type);
+        // TODO semantic equivalence
+    }
 }
 exports.CPPEntity = CPPEntity;
 CPPEntity._nextEntityId = 0;
+function areEntitiesSemanticallyEquivalent(entity, other, equivalenceContext) {
+    return !!(entity === other // also handles case of both undefined
+        || entity && other && entity.isSemanticallyEquivalent(other, equivalenceContext));
+}
+exports.areEntitiesSemanticallyEquivalent = areEntitiesSemanticallyEquivalent;
 class NamedEntity extends CPPEntity {
     /**
      * All NamedEntitys will have a name, but in some cases this might be "". e.g. an unnamed namespace.
@@ -49769,6 +50037,9 @@ exports.CPPError = {
         keyword: function (construct, name) {
             return new CompilerNote(construct, NoteKind.ERROR, "lobster.keyword", "\"" + name + "\" is a special keyword used by the Lobster system and cannot be used as an identifier.");
         },
+        anything_construct: function (construct) {
+            return new CompilerNote(construct, NoteKind.ERROR, "lobster.anything_construct", "An \"anything\" construct is a placeholder for Lobster's semantic analysis system and not a valid program construct.");
+        },
     }
 };
 
@@ -49782,6 +50053,7 @@ exports.CPPError = {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.RuntimeExpression = exports.allObjectTyped = exports.allWellTyped = exports.Expression = void 0;
+const constructs_1 = __webpack_require__(4293);
 const PotentialFullExpression_1 = __webpack_require__(2593);
 const types_1 = __webpack_require__(8716);
 const predicates_1 = __webpack_require__(941);
@@ -49807,6 +50079,13 @@ class Expression extends PotentialFullExpression_1.PotentialFullExpression {
     // }
     isTailChild(child) {
         return { isTail: false };
+    }
+    analytic() {
+        return this;
+    }
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areAllSemanticallyEquivalent(this.children, other.children, ec);
     }
 }
 exports.Expression = Expression;
@@ -49843,9 +50122,9 @@ exports.RuntimeExpression = RuntimeExpression;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RuntimeFunctionArrowExpression = exports.RuntimeObjectArrowExpression = exports.ArrowExpression = exports.RuntimeFunctionDotExpression = exports.RuntimeObjectDotExpression = exports.DotExpression = exports.RuntimeSubscriptExpression = exports.SubscriptExpression = exports.RuntimeLogicalNotExpression = exports.LogicalNotExpression = exports.RuntimeUnaryMinusExpression = exports.UnaryMinusExpression = exports.RuntimeUnaryPlusExpression = exports.UnaryPlusExpression = exports.RuntimeAddressOfExpression = exports.AddressOfExpression = exports.RuntimeDereferenceExpression = exports.DereferenceExpression = exports.RuntimePrefixIncrementExpression = exports.PrefixIncrementExpression = exports.RuntimeLogicalBinaryOperatorExpression = exports.LogicalBinaryOperatorExpression = exports.RuntimePointerComparisonExpression = exports.PointerComparisonExpression = exports.RuntimeRelationalBinaryOperator = exports.RelationalBinaryOperatorExpression = exports.RuntimeInputOperatorExpression = exports.InputOperatorExpression = exports.RuntimeOutputOperatorExpression = exports.OutputOperatorExpression = exports.RuntimePointerOffset = exports.PointerOffsetExpression = exports.RuntimePointerDifference = exports.PointerDifferenceExpression = exports.RuntimeArithmeticBinaryOperator = exports.ArithmeticBinaryOperatorExpression = exports.RuntimeCompoundAssignment = exports.CompoundAssignmentExpression = exports.RuntimeAssignment = exports.AssignmentExpression = exports.RuntimeTernary = exports.TernaryExpression = exports.RuntimeComma = exports.CommaExpression = exports.SimpleRuntimeExpression = exports.InvalidExpression = exports.UnsupportedExpression = exports.createRuntimeExpression = exports.createExpressionFromAST = exports.readValueWithAlert = void 0;
-exports.NonMemberOperatorOverloadExpression = exports.selectOperatorOverload = exports.usualArithmeticConversions = exports.isConvertible = exports.isConvertibleToPointer = exports.isIntegerLiteralZero = exports.integralPromotion = exports.standardConversion = exports.qualificationConversion = exports.typeConversion = exports.convertToPRValue = exports.QualificationConversion = exports.FloatingToIntegralConversion = exports.IntegralToFloatingConversion = exports.FloatingPointConversion = exports.FloatingPointPromotion = exports.IntegralConversion = exports.IntegralPromotion = exports.IntegralToBooleanConversion = exports.FloatingToBooleanConversion = exports.PointerToBooleanConversion = exports.PointerConversion = exports.NullPointerConversion = exports.StreamToBoolConversion = exports.ArrayToPointerConversion = exports.LValueToRValueConversion = exports.RuntimeImplicitConversion = exports.ImplicitConversion = exports.RuntimeMagicFunctionCallExpression = exports.MagicFunctionCallExpression = exports.overloadResolution = exports.AuxiliaryExpression = exports.RuntimeInitializerListExpression = exports.InitializerListExpression = exports.RuntimeParentheses = exports.ParenthesesExpression = exports.RuntimeStringLiteralExpression = exports.StringLiteralExpression = exports.RuntimeNumericLiteral = exports.NumericLiteralExpression = exports.RuntimeNullptrExpression = exports.NullptrExpression = exports.RuntimeThisExpression = exports.ThisExpression = exports.RuntimeFunctionIdentifierExpression = exports.RuntimeObjectIdentifierExpression = exports.entityLookup = exports.IdentifierExpression = exports.RuntimePostfixIncrementExpression = exports.PostfixIncrementExpression = void 0;
-exports.InvalidOperatorOverloadExpression = exports.RuntimeMemberOperatorOverloadExpression = exports.MemberOperatorOverloadExpression = exports.RuntimeNonMemberOperatorOverloadExpression = void 0;
+exports.RuntimeObjectArrowExpression = exports.ArrowExpression = exports.RuntimeFunctionDotExpression = exports.RuntimeObjectDotExpression = exports.DotExpression = exports.RuntimeSubscriptExpression = exports.SubscriptExpression = exports.RuntimeLogicalNotExpression = exports.LogicalNotExpression = exports.RuntimeUnaryMinusExpression = exports.UnaryMinusExpression = exports.RuntimeUnaryPlusExpression = exports.UnaryPlusExpression = exports.RuntimeAddressOfExpression = exports.AddressOfExpression = exports.RuntimeDereferenceExpression = exports.DereferenceExpression = exports.RuntimePrefixIncrementExpression = exports.PrefixIncrementExpression = exports.RuntimeLogicalBinaryOperatorExpression = exports.LogicalBinaryOperatorExpression = exports.RuntimePointerComparisonExpression = exports.PointerComparisonExpression = exports.RuntimeRelationalBinaryOperator = exports.RelationalBinaryOperatorExpression = exports.RuntimeInputOperatorExpression = exports.InputOperatorExpression = exports.RuntimeOutputOperatorExpression = exports.OutputOperatorExpression = exports.RuntimePointerOffset = exports.PointerOffsetExpression = exports.RuntimePointerDifference = exports.PointerDifferenceExpression = exports.RuntimeArithmeticBinaryOperator = exports.ArithmeticBinaryOperatorExpression = exports.RuntimeCompoundAssignment = exports.CompoundAssignmentExpression = exports.RuntimeAssignment = exports.AssignmentExpression = exports.RuntimeTernary = exports.TernaryExpression = exports.RuntimeComma = exports.CommaExpression = exports.SimpleRuntimeExpression = exports.AnythingExpression = exports.InvalidExpression = exports.UnsupportedExpression = exports.createRuntimeExpression = exports.createExpressionFromAST = exports.readValueWithAlert = void 0;
+exports.usualArithmeticConversions = exports.isConvertible = exports.isConvertibleToPointer = exports.isIntegerLiteralZero = exports.integralPromotion = exports.standardConversion = exports.qualificationConversion = exports.typeConversion = exports.convertToPRValue = exports.QualificationConversion = exports.FloatingToIntegralConversion = exports.IntegralToFloatingConversion = exports.FloatingPointConversion = exports.FloatingPointPromotion = exports.IntegralConversion = exports.IntegralPromotion = exports.IntegralToBooleanConversion = exports.FloatingToBooleanConversion = exports.PointerToBooleanConversion = exports.ToBooleanConversion = exports.PointerConversion = exports.NullPointerConversion = exports.StreamToBoolConversion = exports.ArrayToPointerConversion = exports.LValueToRValueConversion = exports.RuntimeImplicitConversion = exports.ImplicitConversion = exports.RuntimeMagicFunctionCallExpression = exports.MagicFunctionCallExpression = exports.overloadResolution = exports.AuxiliaryExpression = exports.RuntimeInitializerListExpression = exports.InitializerListExpression = exports.RuntimeParentheses = exports.ParenthesesExpression = exports.RuntimeStringLiteralExpression = exports.StringLiteralExpression = exports.RuntimeNumericLiteral = exports.NumericLiteralExpression = exports.RuntimeNullptrExpression = exports.NullptrExpression = exports.RuntimeThisExpression = exports.ThisExpression = exports.RuntimeFunctionIdentifierExpression = exports.RuntimeObjectIdentifierExpression = exports.entityLookup = exports.IdentifierExpression = exports.RuntimePostfixIncrementExpression = exports.PostfixIncrementExpression = exports.RuntimeFunctionArrowExpression = void 0;
+exports.InvalidOperatorOverloadExpression = exports.RuntimeMemberOperatorOverloadExpression = exports.MemberOperatorOverloadExpression = exports.RuntimeNonMemberOperatorOverloadExpression = exports.NonMemberOperatorOverloadExpression = exports.selectOperatorOverload = void 0;
 const objects_1 = __webpack_require__(697);
 const Simulation_1 = __webpack_require__(2295);
 const types_1 = __webpack_require__(8716);
@@ -49863,6 +50142,7 @@ const opaqueExpression_1 = __webpack_require__(7104);
 const FunctionCall_1 = __webpack_require__(20);
 const new_delete_1 = __webpack_require__(2328);
 const ast_expressions_1 = __webpack_require__(3044);
+const semantic_equivalence_1 = __webpack_require__(3222);
 function readValueWithAlert(obj, sim) {
     let value = obj.readValue();
     if (!value.isValid) {
@@ -49919,7 +50199,8 @@ const ExpressionConstructsMap = {
     "string_literal_expression": (ast, context) => StringLiteralExpression.createFromAST(ast, context),
     "parentheses_expression": (ast, context) => ParenthesesExpression.createFromAST(ast, context),
     "initializer_list_expression": (ast, context) => InitializerListExpression.createFromAST(ast, context),
-    "opaque_expression": (ast, context) => opaqueExpression_1.OpaqueExpression.createFromAST(ast, context)
+    "opaque_expression": (ast, context) => opaqueExpression_1.OpaqueExpression.createFromAST(ast, context),
+    "anything_construct": (ast, context) => new AnythingExpression(context, ast)
 };
 /**
  * Creates an expression construct based on a given expression AST node.
@@ -49937,13 +50218,14 @@ function createExpressionFromAST(ast, context) {
 exports.createExpressionFromAST = createExpressionFromAST;
 const ExpressionConstructsRuntimeMap = {
     "unsupported_expression": (construct, parent) => { throw new Error("Cannot create a runtime instance of an unsupported construct."); },
+    "anything_construct": (construct, parent) => { throw new Error("Cannot create a runtime instance of an \"anything\" placeholder construct."); },
     "invalid_operator_overload_expression": (construct, parent) => { throw new Error("Cannot create a runtime instance of an invalid operator overload expression."); },
     "comma_expression": (construct, parent) => new RuntimeComma(construct, parent),
     "ternary_expression": (construct, parent) => new RuntimeTernary(construct, parent),
     "assignment_expression": (construct, parent) => new RuntimeAssignment(construct, parent),
     "compound_assignment_expression": (construct, parent) => new RuntimeCompoundAssignment(construct, parent),
     "arithmetic_binary_operator_expression": (construct, parent) => new RuntimeArithmeticBinaryOperator(construct, parent),
-    "pointer_diference_expression": (construct, parent) => new RuntimePointerDifference(construct, parent),
+    "pointer_difference_expression": (construct, parent) => new RuntimePointerDifference(construct, parent),
     "pointer_offset_expression": (construct, parent) => new RuntimePointerOffset(construct, parent),
     "output_operator_expression": (construct, parent) => new RuntimeOutputOperatorExpression(construct, parent),
     "input_operator_expression": (construct, parent) => new RuntimeInputOperatorExpression(construct, parent),
@@ -50013,6 +50295,7 @@ class UnsupportedExpression extends expressionBase_1.Expression {
         this.construct_type = "unsupported_expression";
         this.type = undefined;
         this.valueCategory = undefined;
+        this.unsupportedName = unsupportedName;
         this.addNote(errors_1.CPPError.lobster.unsupported_feature(this, unsupportedName));
     }
     createDefaultOutlet(element, parent) {
@@ -50022,6 +50305,10 @@ class UnsupportedExpression extends expressionBase_1.Expression {
         return {
             message: "an unsupported expression"
         };
+    }
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type
+            && other.unsupportedName === this.unsupportedName;
     }
 }
 exports.UnsupportedExpression = UnsupportedExpression;
@@ -50040,8 +50327,30 @@ class InvalidExpression extends expressionBase_1.Expression {
             message: "an unsupported expression"
         };
     }
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type;
+    }
 }
 exports.InvalidExpression = InvalidExpression;
+class AnythingExpression extends expressionBase_1.Expression {
+    constructor(context, ast) {
+        super(context, ast);
+        this.construct_type = "anything_construct";
+        this.addNote(errors_1.CPPError.lobster.anything_construct(this));
+    }
+    createDefaultOutlet(element, parent) {
+        throw new Error("Cannot create an outlet for an \"anything\" placeholder construct.");
+    }
+    describeEvalResult(depth) {
+        return {
+            message: "an \"anything\" placeholder expression to support semantic analysis"
+        };
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return true;
+    }
+}
+exports.AnythingExpression = AnythingExpression;
 class SimpleRuntimeExpression extends expressionBase_1.RuntimeExpression {
     constructor(model, parent) {
         super(model, parent);
@@ -50097,6 +50406,11 @@ class CommaExpression extends expressionBase_1.Expression {
     // }
     describeEvalResult(depth) {
         return this.right.describeEvalResult(depth);
+    }
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areSemanticallyEquivalent(this.left, other.left, ec)
+            && constructs_1.areSemanticallyEquivalent(this.right, other.right, ec);
     }
 }
 exports.CommaExpression = CommaExpression;
@@ -50168,6 +50482,24 @@ class TernaryExpression extends expressionBase_1.Expression {
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
     }
+    // public isTailChild(child: CPPConstruct) {
+    //     if (child === this.condition){
+    //         return {isTail: false,
+    //             reason: "One of the two subexpressions in the ternary operator will be evaluated after the function call.",
+    //             others: [this.then, this.otherwise]
+    //         };
+    //     }
+    //     else{
+    //         return {isTail: true};
+    //     }
+    // }
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areSemanticallyEquivalent(this.condition, other.condition, ec)
+            && constructs_1.areSemanticallyEquivalent(this.then, other.then, ec)
+            && constructs_1.areSemanticallyEquivalent(this.otherwise, other.otherwise, ec);
+        // TODO semantic equivalence (or reversed logic and switched consequences)
+    }
 }
 exports.TernaryExpression = TernaryExpression;
 class RuntimeTernary extends expressionBase_1.RuntimeExpression {
@@ -50194,7 +50526,7 @@ class RuntimeTernary extends expressionBase_1.RuntimeExpression {
         }
     }
     stepForwardImpl() {
-        this.setEvalResult(this.then ? this.then.evalResult : this.otherwise.evalResult);
+        this.setEvalResult(this.condition.evalResult.rawValue ? this.then.evalResult : this.otherwise.evalResult);
         this.startCleanup();
     }
 }
@@ -50268,6 +50600,16 @@ class AssignmentExpression extends expressionBase_1.Expression {
         var lhs = this.lhs.describeEvalResult(0);
         var rhs = this.rhs.describeEvalResult(0);
         return { message: "The value of " + (rhs.name || rhs.message) + " will be assigned to " + (lhs.name || lhs.message) + "." };
+    }
+    isSemanticallyEquivalent_impl(other, ec) {
+        if (other.construct_type === this.construct_type
+            && this.areChildrenSemanticallyEquivalent(other, ec)) {
+            return true;
+        }
+        else if (other.construct_type === "compound_assignment_expression") {
+            return semantic_equivalence_1.assignmentEquivalence(this, other, ec);
+        }
+        return false;
     }
 }
 exports.AssignmentExpression = AssignmentExpression;
@@ -50358,6 +50700,16 @@ class CompoundAssignmentExpression extends expressionBase_1.Expression {
         var lhs = this.lhs.describeEvalResult(0);
         var rhs = this.rhs.describeEvalResult(0);
         return { message: `The value of ${lhs.name || lhs.message} ${this.equivalentBinaryOp} ${rhs.name || rhs.message} will be assigned to ${lhs.name || lhs.message}.` };
+    }
+    isSemanticallyEquivalent_impl(other, ec) {
+        if (other.construct_type === this.construct_type
+            && this.areChildrenSemanticallyEquivalent(other, ec)) {
+            return true;
+        }
+        else if (other.construct_type === "assignment_expression") {
+            return semantic_equivalence_1.assignmentEquivalence(other, this, ec);
+        }
+        return false;
     }
 }
 exports.CompoundAssignmentExpression = CompoundAssignmentExpression;
@@ -50591,6 +50943,39 @@ class ArithmeticBinaryOperatorExpression extends BinaryOperatorExpression {
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
     }
+    isSemanticallyEquivalent_impl(other, ec) {
+        if (other.construct_type !== this.construct_type) {
+            return false;
+        }
+        if (other.operator === this.operator && constructs_1.areAllSemanticallyEquivalent(this.children, other.children, ec)) {
+            return true;
+        }
+        // Commutative operators
+        switch (this.operator) {
+            // commutative operators
+            case "+":
+            case "*":
+            case "&":
+            case "|":
+            case "^":
+                if (other.operator === this.operator
+                    && constructs_1.areSemanticallyEquivalent(this.left, other.right, ec)
+                    && constructs_1.areSemanticallyEquivalent(this.right, other.left, ec)) {
+                    return true;
+                }
+                break;
+            case "-":
+            case "/":
+            case "%":
+            case "<<":
+            case ">>":
+                return false;
+                break;
+            default:
+                util_1.assertNever(this.operator);
+        }
+        return false;
+    }
 }
 exports.ArithmeticBinaryOperatorExpression = ArithmeticBinaryOperatorExpression;
 // TODO: rename this or maybe create two separate classes for Arithmetic and Logical
@@ -50610,7 +50995,7 @@ exports.RuntimeArithmeticBinaryOperator = RuntimeArithmeticBinaryOperator;
 class PointerDifferenceExpression extends BinaryOperatorExpression {
     constructor(context, ast, left, right) {
         super(context, ast, "-");
-        this.construct_type = "pointer_diference_expression";
+        this.construct_type = "pointer_difference_expression";
         this.valueCategory = "prvalue";
         // Not necessary assuming they come in as prvalues that are confirmed to have pointer type.
         // if (left.isWellTyped() && right.isWellTyped()) {
@@ -50963,6 +51348,58 @@ class RelationalBinaryOperatorExpression extends BinaryOperatorExpression {
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
     }
+    isSemanticallyEquivalent_impl(other, ec) {
+        if (other.construct_type === this.construct_type) {
+            if (other.operator === this.operator && this.areChildrenSemanticallyEquivalent(other, ec)) {
+                return true;
+            }
+            switch (this.operator) {
+                // commutative operators
+                case "!=":
+                case "==":
+                    if (other.operator === this.operator
+                        && constructs_1.areSemanticallyEquivalent(this.left, other.right, ec)
+                        && constructs_1.areSemanticallyEquivalent(this.right, other.left, ec)) {
+                        return true;
+                    }
+                    break;
+                case "<":
+                    if (other.operator === ">"
+                        && constructs_1.areSemanticallyEquivalent(this.left, other.right, ec)
+                        && constructs_1.areSemanticallyEquivalent(this.right, other.left, ec)) {
+                        return true;
+                    }
+                    break;
+                case "<=":
+                    if (other.operator === ">="
+                        && constructs_1.areSemanticallyEquivalent(this.left, other.right, ec)
+                        && constructs_1.areSemanticallyEquivalent(this.right, other.left, ec)) {
+                        return true;
+                    }
+                    break;
+                case ">":
+                    if (other.operator === "<"
+                        && constructs_1.areSemanticallyEquivalent(this.left, other.right, ec)
+                        && constructs_1.areSemanticallyEquivalent(this.right, other.left, ec)) {
+                        return true;
+                    }
+                    break;
+                case ">=":
+                    if (other.operator === "<="
+                        && constructs_1.areSemanticallyEquivalent(this.left, other.right, ec)
+                        && constructs_1.areSemanticallyEquivalent(this.right, other.left, ec)) {
+                        return true;
+                    }
+                    break;
+                default:
+                    util_1.assertNever(this.operator);
+            }
+        }
+        if (other instanceof IntegralToBooleanConversion) {
+            return semantic_equivalence_1.checkForZeroEquivalence(other, this, ec);
+        }
+        return false;
+    }
 }
 exports.RelationalBinaryOperatorExpression = RelationalBinaryOperatorExpression;
 class RuntimeRelationalBinaryOperator extends SimpleRuntimeExpression {
@@ -51007,6 +51444,16 @@ class PointerComparisonExpression extends BinaryOperatorExpression {
     // }
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
+    }
+    isSemanticallyEquivalent_impl(other, ec) {
+        if (other.construct_type === this.construct_type) {
+            return other.operator === this.operator
+                && this.areChildrenSemanticallyEquivalent(other, ec);
+        }
+        if (other instanceof PointerToBooleanConversion) {
+            return semantic_equivalence_1.checkForNullptrEquivalence(other, this, ec);
+        }
+        return false;
     }
 }
 exports.PointerComparisonExpression = PointerComparisonExpression;
@@ -51774,6 +52221,21 @@ class DotExpression extends expressionBase_1.Expression {
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
     }
+    //     isTailChild : function(child){
+    //         return {isTail: false,
+    //             reason: "The subscripting will happen after the recursive call returns.",
+    //             others: [this]
+    //         };
+    //     }
+    entitiesUsed() {
+        return this.entity ? [this.entity] : [];
+    }
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type
+            && this.memberName === other.memberName
+            && constructs_1.areSemanticallyEquivalent(this.operand, other.operand, ec)
+            && entities_1.areEntitiesSemanticallyEquivalent(this.entity, other.entity, ec);
+    }
 }
 exports.DotExpression = DotExpression;
 class RuntimeObjectDotExpression extends expressionBase_1.RuntimeExpression {
@@ -51941,6 +52403,21 @@ class ArrowExpression extends expressionBase_1.Expression {
     }
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
+    }
+    //     isTailChild : function(child){
+    //         return {isTail: false,
+    //             reason: "The subscripting will happen after the recursive call returns.",
+    //             others: [this]
+    //         };
+    //     }
+    entitiesUsed() {
+        return this.entity ? [this.entity] : [];
+    }
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type
+            && this.memberName === other.memberName
+            && constructs_1.areSemanticallyEquivalent(this.operand, other.operand, ec)
+            && entities_1.areEntitiesSemanticallyEquivalent(this.entity, other.entity, ec);
     }
 }
 exports.ArrowExpression = ArrowExpression;
@@ -52361,6 +52838,21 @@ class IdentifierExpression extends expressionBase_1.Expression {
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
     }
+    // describeEvalResult : function(depth, sim, inst){
+    //     if (inst && inst.evalResult){
+    //         return inst.evalResult.describe();
+    //     }
+    //     // Note don't care about depth since we always just use identifier
+    //     else{
+    //         return this.entity.describe(sim, inst);
+    //     }
+    // },
+    // explain : function(sim: Simulation, rtConstruct: RuntimeConstruct) {
+    //     return {message: this.entity.name};
+    // }
+    entitiesUsed() {
+        return this.entity ? [this.entity] : [];
+    }
 }
 exports.IdentifierExpression = IdentifierExpression;
 /**
@@ -52543,8 +53035,10 @@ class NumericLiteralExpression extends expressionBase_1.Expression {
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
     }
-    isIntegerZero() {
-        return;
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type
+            && types_1.sameType(this.type, other.type)
+            && this.value.rawValue === other.value.rawValue;
     }
 }
 exports.NumericLiteralExpression = NumericLiteralExpression;
@@ -52623,6 +53117,15 @@ class ParenthesesExpression extends expressionBase_1.Expression {
     }
     describeEvalResult(depth) {
         throw new Error("Method not implemented.");
+    }
+    isSemanticallyEquivalent_impl(other, ec) {
+        if (other.construct_type === this.construct_type) {
+            return constructs_1.areSemanticallyEquivalent(this.subexpression, other.subexpression, ec);
+        }
+        if (constructs_1.areSemanticallyEquivalent(this.subexpression, other, ec)) {
+            return true;
+        }
+        return false;
     }
 }
 exports.ParenthesesExpression = ParenthesesExpression;
@@ -52832,7 +53335,11 @@ const MAGIC_FUNCTIONS = {
         operate: (rt) => {
             let arg = rt.args[0].evalResult;
             if (!arg.rawValue) {
+                console.log("assertion failed");
                 rt.sim.eventOccurred(Simulation_1.SimulationEvent.ASSERTION_FAILURE, `Assertion failed on line ${rt.model.getNearestSourceReference().line}.`, true);
+            }
+            else {
+                console.log("assertion PASSED");
             }
         }
     },
@@ -53101,7 +53608,7 @@ exports.NullPointerConversion = NullPointerConversion;
 class PointerConversion extends NoOpTypeConversion {
 }
 exports.PointerConversion = PointerConversion;
-class ToBooleanConversionBase extends TypeConversion {
+class ToBooleanConversion extends TypeConversion {
     constructor(from) {
         super(from, types_1.Bool.BOOL);
     }
@@ -53109,13 +53616,34 @@ class ToBooleanConversionBase extends TypeConversion {
         return new runtimeEnvironment_1.Value(fromEvalResult.rawValue === 0 ? 0 : 1, types_1.Bool.BOOL, fromEvalResult.isValid);
     }
 }
-class PointerToBooleanConversion extends ToBooleanConversionBase {
+exports.ToBooleanConversion = ToBooleanConversion;
+class PointerToBooleanConversion extends ToBooleanConversion {
+    // public readonly construct_type = "PointerToBooleanConversion";
+    isSemanticallyEquivalent_impl(other, ec) {
+        if (other.construct_type === this.construct_type) {
+            return constructs_1.areSemanticallyEquivalent(this.from, other.from, ec);
+        }
+        if (other.construct_type === "pointer_comparison_expression") {
+            return semantic_equivalence_1.checkForNullptrEquivalence(this, other, ec);
+        }
+        return false;
+    }
 }
 exports.PointerToBooleanConversion = PointerToBooleanConversion;
-class FloatingToBooleanConversion extends ToBooleanConversionBase {
+class FloatingToBooleanConversion extends ToBooleanConversion {
 }
 exports.FloatingToBooleanConversion = FloatingToBooleanConversion;
-class IntegralToBooleanConversion extends ToBooleanConversionBase {
+class IntegralToBooleanConversion extends ToBooleanConversion {
+    // public readonly construct_type = "IntegralToBooleanConversion";
+    isSemanticallyEquivalent_impl(other, ec) {
+        if (other.construct_type === this.construct_type) {
+            return constructs_1.areSemanticallyEquivalent(this.from, other.from, ec);
+        }
+        if (other.construct_type === "relational_binary_operator_expression") {
+            return semantic_equivalence_1.checkForZeroEquivalence(this, other, ec);
+        }
+        return false;
+    }
 }
 exports.IntegralToBooleanConversion = IntegralToBooleanConversion;
 class IntegralPromotion extends NoOpTypeConversion {
@@ -53731,6 +54259,10 @@ const opaqueExpression_1 = __webpack_require__(7104);
 class Initializer extends PotentialFullExpression_1.PotentialFullExpression {
     isTailChild(child) {
         return { isTail: true };
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+        // TODO semantic equivalence
     }
 }
 exports.Initializer = Initializer;
@@ -54698,6 +55230,10 @@ class CtorInitializer extends constructs_1.BasicCPPConstruct {
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.CtorInitializerOutlet(element, this, parent);
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+        // TODO semantic equivalence
+    }
 }
 exports.CtorInitializer = CtorInitializer;
 const INDEX_CTOR_INITIALIZER_DELEGATE = 0;
@@ -55158,7 +55694,7 @@ exports.RuntimeArrayAggregateInitializer = RuntimeArrayAggregateInitializer;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.isQualifiedIdentifier = exports.isUnqualifiedIdentifier = exports.identifierToString = exports.astToIdentifier = exports.isQualifiedName = exports.isUnqualifiedName = exports.composeQualifiedName = exports.getQualifiedName = exports.getUnqualifiedName = exports.checkIdentifier = exports.ALT_OPS = exports.LOBSTER_KEYWORDS = exports.LOBSTER_MAGIC_FUNCTIONS = exports.MAGIC_FUNCTION_NAMES = exports.KEYWORDS = void 0;
+exports.qualifiedNamesEq = exports.isQualifiedIdentifier = exports.isUnqualifiedIdentifier = exports.identifierToString = exports.astToIdentifier = exports.isQualifiedName = exports.isUnqualifiedName = exports.composeQualifiedName = exports.getQualifiedName = exports.getUnqualifiedName = exports.checkIdentifier = exports.ALT_OPS = exports.LOBSTER_KEYWORDS = exports.LOBSTER_MAGIC_FUNCTIONS = exports.MAGIC_FUNCTION_NAMES = exports.KEYWORDS = void 0;
 const errors_1 = __webpack_require__(5244);
 const util_1 = __webpack_require__(6560);
 exports.KEYWORDS = new Set([
@@ -55282,6 +55818,10 @@ function isQualifiedIdentifier(id) {
     return typeof id !== "string";
 }
 exports.isQualifiedIdentifier = isQualifiedIdentifier;
+function qualifiedNamesEq(qid1, qid2) {
+    return identifierToString(qid1) === identifierToString(qid2);
+}
+exports.qualifiedNamesEq = qualifiedNamesEq;
 
 
 /***/ }),
@@ -55340,13 +55880,11 @@ class NewExpression extends expressionBase_1.Expression {
         this.type = new types_1.PointerType(createdType);
         let initAST = ast.initializer;
         let newEntity = new entities_1.NewObjectEntity(createdType);
-        let initializer = !initAST ?
-            initializers_1.DefaultInitializer.create(context, newEntity) :
-            initAST.construct_type === "direct_initializer" ?
-                initializers_1.DirectInitializer.create(context, newEntity, initAST.args.map((a) => expressions_1.createExpressionFromAST(a, context)), "direct") :
-                initAST.construct_type === "list_initializer" ?
-                    initializers_1.ListInitializer.create(context, newEntity, initAST.arg.elements.map((a) => expressions_1.createExpressionFromAST(a, context))) :
-                    util_1.assertNever(initAST);
+        let initializer = !initAST ? initializers_1.DefaultInitializer.create(context, newEntity) :
+            initAST.construct_type === "value_initializer" ? initializers_1.ValueInitializer.create(context, newEntity) :
+                initAST.construct_type === "direct_initializer" ? initializers_1.DirectInitializer.create(context, newEntity, initAST.args.map((a) => expressions_1.createExpressionFromAST(a, context)), "direct") :
+                    initAST.construct_type === "list_initializer" ? initializers_1.ListInitializer.create(context, newEntity, initAST.arg.elements.map((a) => expressions_1.createExpressionFromAST(a, context))) :
+                        util_1.assertNever(initAST);
         if (initializer.construct_type !== "invalid_construct") {
             this.attach(this.initializer = initializer);
         }
@@ -55364,10 +55902,8 @@ class NewExpression extends expressionBase_1.Expression {
 exports.NewExpression = NewExpression;
 class RuntimeNewExpression extends expressionBase_1.RuntimeExpression {
     constructor(model, parent) {
-        var _a;
         super(model, parent);
         this.index = 0;
-        this.initializer = (_a = this.model.initializer) === null || _a === void 0 ? void 0 : _a.createRuntimeInitializer(this);
     }
     upNextImpl() {
         if (this.index === 1) {
@@ -55376,8 +55912,10 @@ class RuntimeNewExpression extends expressionBase_1.RuntimeExpression {
         }
     }
     stepForwardImpl() {
+        var _a;
         if (this.index === 0) {
             this.allocatedObject = this.sim.memory.heap.allocateNewObject(this.model.createdType);
+            this.initializer = (_a = this.model.initializer) === null || _a === void 0 ? void 0 : _a.createRuntimeInitializer(this);
             ++this.index;
         }
         else {
@@ -56777,6 +57315,11 @@ var Predicates;
         return Predicates.byKind("subscript_expression")(construct) || Predicates.byOperatorOverloadCall("[]")(construct);
     }
     Predicates.isIndexingOperation = isIndexingOperation;
+    Predicates.isBinaryOperatorExpression = Predicates.byKinds([
+        "arithmetic_binary_operator_expression",
+        "relational_binary_operator_expression",
+        "logical_binary_operator_expression"
+    ]);
 })(Predicates = exports.Predicates || (exports.Predicates = {}));
 
 
@@ -57083,6 +57626,7 @@ class Memory {
             // length + 1 below is for null character
             let object = new objects_1.StringLiteralObject(new types_1.BoundedArrayType(types_1.Char.CHAR, contents.length + 1), this, this.staticTop);
             this.allocateObject(object);
+            object.beginLifetime();
             // record the string literal in case we see more that are the same in the future
             this.stringLiteralMap[contents] = object;
             // write value of string literal into the object
@@ -57306,7 +57850,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.synchronousCloneSimulation = exports.asyncCloneSimulation = exports.AsynchronousSimulationRunner = exports.SynchronousSimulationRunner = void 0;
 const Simulation_1 = __webpack_require__(2295);
-const simOutlets_1 = __webpack_require__(9357);
+const CPP_ANIMATIONS_1 = __webpack_require__(5348);
 const initializers_1 = __webpack_require__(1288);
 const entities_1 = __webpack_require__(8397);
 const FunctionCall_1 = __webpack_require__(20);
@@ -57362,9 +57906,13 @@ class SynchronousSimulationRunner {
     /**
      * Repeatedly steps forward until the simulation has ended.
      */
-    stepToEnd() {
-        while (!this.simulation.atEnd) {
-            this.simulation.stepForward();
+    stepToEnd(stepLimit, stopOnCinBlock = false) {
+        let stepsTaken = 0;
+        while (!this.simulation.atEnd
+            && (!stopOnCinBlock || !this.simulation.isBlockingUntilCin)
+            && (stepLimit === undefined || stepsTaken < stepLimit)) {
+            this.stepForward();
+            ++stepsTaken;
         }
     }
     /**
@@ -57551,10 +58099,11 @@ class AsynchronousSimulationRunner {
      * Repeatedly steps forward until just before main will exit
      */
     stepToEndOfMain(delay = this.delay, stepLimit, stopOnCinBlock = false) {
-        var _a;
+        var _a, _b;
         return __awaiter(this, void 0, void 0, function* () {
             let stepsTaken = 0;
             while (((_a = this.simulation.top()) === null || _a === void 0 ? void 0 : _a.model) !== this.simulation.program.mainFunction.body.localDeallocator
+                && ((_b = this.simulation.top()) === null || _b === void 0 ? void 0 : _b.model) !== this.simulation.program.mainFunction
                 && (!stopOnCinBlock || !this.simulation.isBlockingUntilCin)
                 && (stepLimit === undefined || stepsTaken < stepLimit)) {
                 yield this.takeOneAction(Simulation_1.STEP_FORWARD_ACTION, delay);
@@ -57595,11 +58144,11 @@ class AsynchronousSimulationRunner {
             // Take first step with no delay
             // if (top instanceof RuntimeFunctionCall && top.model.func.firstDeclaration.context.isLibrary) {
             if (top.model.context.isLibrary) {
-                simOutlets_1.setCPP_ANIMATIONS(false);
+                CPP_ANIMATIONS_1.setCPP_ANIMATIONS(false);
             }
             yield this.takeOneAction(Simulation_1.STEP_FORWARD_ACTION, 0);
             if (top.model.context.isLibrary) {
-                simOutlets_1.setCPP_ANIMATIONS(false);
+                CPP_ANIMATIONS_1.setCPP_ANIMATIONS(false);
             }
             // if (top instanceof RuntimeFunctionCall) {
             top = this.simulation.top();
@@ -57610,7 +58159,7 @@ class AsynchronousSimulationRunner {
                 yield this.takeOneAction(Simulation_1.STEP_FORWARD_ACTION, delay);
                 top = this.simulation.top();
             }
-            simOutlets_1.setCPP_ANIMATIONS(true);
+            CPP_ANIMATIONS_1.setCPP_ANIMATIONS(true);
             // }
             // else {
             //     await this.stepForward();
@@ -57687,7 +58236,7 @@ exports.synchronousCloneSimulation = synchronousCloneSimulation;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RuntimeForStatement = exports.ForStatement = exports.RuntimeWhileStatement = exports.WhileStatement = exports.RuntimeIfStatement = exports.IfStatement = exports.RuntimeBlock = exports.Block = exports.RuntimeReturnStatement = exports.ReturnStatement = exports.RuntimeBreakStatement = exports.BreakStatement = exports.RuntimeDeclarationStatement = exports.DeclarationStatement = exports.RuntimeNullStatement = exports.NullStatement = exports.RuntimeExpressionStatement = exports.ExpressionStatement = exports.UnsupportedStatement = exports.RuntimeStatement = exports.Statement = exports.createRuntimeStatement = exports.createStatementFromAST = void 0;
+exports.RuntimeForStatement = exports.ForStatement = exports.RuntimeWhileStatement = exports.WhileStatement = exports.RuntimeIfStatement = exports.IfStatement = exports.RuntimeBlock = exports.Block = exports.RuntimeReturnStatement = exports.ReturnStatement = exports.RuntimeBreakStatement = exports.BreakStatement = exports.RuntimeDeclarationStatement = exports.DeclarationStatement = exports.RuntimeNullStatement = exports.NullStatement = exports.RuntimeExpressionStatement = exports.ExpressionStatement = exports.AnythingStatement = exports.UnsupportedStatement = exports.RuntimeStatement = exports.Statement = exports.createRuntimeStatement = exports.createStatementFromAST = void 0;
 const constructs_1 = __webpack_require__(4293);
 const errors_1 = __webpack_require__(5244);
 const expressions_1 = __webpack_require__(6597);
@@ -57712,7 +58261,8 @@ const StatementConstructsMap = {
     "return_statement": (ast, context) => ReturnStatement.createFromAST(ast, context),
     "declaration_statement": (ast, context) => DeclarationStatement.createFromAST(ast, context),
     "expression_statement": (ast, context) => ExpressionStatement.createFromAST(ast, context),
-    "null_statement": (ast, context) => new NullStatement(context, ast)
+    "null_statement": (ast, context) => new NullStatement(context, ast),
+    "anything_construct": (ast, context) => new AnythingStatement(context, ast)
 };
 function createStatementFromAST(ast, context) {
     return StatementConstructsMap[ast.construct_type](ast, context);
@@ -57764,8 +58314,25 @@ class UnsupportedStatement extends Statement {
     createDefaultOutlet(element, parent) {
         throw new Error("Cannot create an outlet for an unsupported construct.");
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
+    }
 }
 exports.UnsupportedStatement = UnsupportedStatement;
+class AnythingStatement extends Statement {
+    constructor(context, ast) {
+        super(context, ast);
+        this.construct_type = "anything_construct";
+        this.addNote(errors_1.CPPError.lobster.anything_construct(this));
+    }
+    createDefaultOutlet(element, parent) {
+        throw new Error("Cannot create an outlet for an \"anything\" placeholder construct.");
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return true;
+    }
+}
+exports.AnythingStatement = AnythingStatement;
 class ExpressionStatement extends Statement {
     constructor(context, ast, expression) {
         super(context, ast);
@@ -57780,6 +58347,10 @@ class ExpressionStatement extends Statement {
     }
     isTailChild(child) {
         return { isTail: true };
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areSemanticallyEquivalent(this.expression, other.expression, equivalenceContext);
     }
 }
 exports.ExpressionStatement = ExpressionStatement;
@@ -57812,6 +58383,9 @@ class NullStatement extends Statement {
     }
     isTailChild(child) {
         return { isTail: true }; // Note: NullStatement will never actually have children, so this isn't used
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
     }
 }
 exports.NullStatement = NullStatement;
@@ -57856,6 +58430,11 @@ class DeclarationStatement extends Statement {
     isTailChild(child) {
         return { isTail: true };
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && Array.isArray(this.declarations) && Array.isArray(other.declarations)
+            && constructs_1.areAllSemanticallyEquivalent(this.declarations, other.declarations, equivalenceContext);
+    }
 }
 exports.DeclarationStatement = DeclarationStatement;
 class RuntimeDeclarationStatement extends RuntimeStatement {
@@ -57899,6 +58478,13 @@ class BreakStatement extends Statement {
     }
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.BreakStatementOutlet(element, this, parent);
+    }
+    // isTailChild : function(child){
+    //     return {isTail: true,
+    //         reason: "The recursive call is immediately followed by a return."};
+    // }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type;
     }
 }
 exports.BreakStatement = BreakStatement;
@@ -57956,6 +58542,7 @@ class ReturnStatement extends Statement {
             util_1.assertNever(returnType);
         }
         // Note: The expression is NOT attached directly here, since it's attached under the initializer.
+        this.expression = expression;
         this.attach(this.returnInitializer);
     }
     static createFromAST(ast, context) {
@@ -57965,6 +58552,14 @@ class ReturnStatement extends Statement {
     }
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.ReturnStatementOutlet(element, this, parent);
+    }
+    // isTailChild : function(child){
+    //     return {isTail: true,
+    //         reason: "The recursive call is immediately followed by a return."};
+    // }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areSemanticallyEquivalent(this.expression, other.expression, equivalenceContext);
     }
 }
 exports.ReturnStatement = ReturnStatement;
@@ -58016,8 +58611,90 @@ class Block extends Statement {
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.BlockOutlet(element, this, parent);
     }
+    // isTailChild : function(child){
+    //     var last = this.statements.last();
+    //     if (child !== last){
+    //         if (child === this.statements[this.statements.length-2] && isA(last, Statements.Return) && !last.hasExpression){
+    //             return {isTail: true,
+    //                 reason: "The only thing after the recursive call is an empty return.",
+    //                 others: [last]
+    //             }
+    //         }
+    //         else{
+    //             var others = [];
+    //             for (var otherIndex = this.statements.length-1; this.statements[otherIndex] !== child && otherIndex >= 0; --otherIndex){
+    //                 var other = this.statements[otherIndex];
+    //                 if (!(isA(other, Statements.Return) && !other.expression)){
+    //                     others.unshift(other);
+    //                 }
+    //             }
+    //             return {isTail: false,
+    //                 reason: "There are other statements in this block that will execute after the recursive call.",
+    //                 others: others
+    //             }
+    //         }
+    //     }
+    //     else{
+    //         return {isTail: true};
+    //     }
+    // }
+    isSemanticallyEquivalent_impl(other, ec) {
+        if (other.construct_type === this.construct_type
+            && constructs_1.areAllSemanticallyEquivalent(this.statements, other.statements, ec)
+            && constructs_1.areSemanticallyEquivalent(this.localDeallocator, other.localDeallocator, ec)) {
+            return true;
+        }
+        if (other.construct_type === this.construct_type) {
+            // Try identifying chunks that can be rearranged
+            let chunks = this.getChunks();
+            let otherChunks = other.getChunks();
+            // Now our condition is just that each chunk is equivalent
+            if (chunks.length === otherChunks.length && chunks.every((c, i) => areChunksEquivalent(c, otherChunks[i], ec))
+                && constructs_1.areSemanticallyEquivalent(this.localDeallocator, other.localDeallocator, ec)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    getChunks() {
+        let chunks = [];
+        let currentChunk;
+        this.statements.forEach(stmt => {
+            if (stmt.construct_type === "declaration_statement" || stmt.construct_type === "expression_statement") {
+                if (currentChunk) {
+                    if (stmt.entitiesUsed().some(e => currentChunk.entitiesUsed.has(e.entityId))) {
+                        // some entity was used, start a new chunk
+                        chunks.push(currentChunk.stmts);
+                        currentChunk = { stmts: [stmt], entitiesUsed: new Set(stmt.entitiesUsed().map(e => e.entityId)) };
+                    }
+                    else {
+                        currentChunk.stmts.push(stmt);
+                        stmt.entitiesUsed().forEach(e => currentChunk.entitiesUsed.add(e.entityId));
+                    }
+                }
+                else {
+                    currentChunk = { stmts: [stmt], entitiesUsed: new Set(stmt.entitiesUsed().map(e => e.entityId)) };
+                }
+            }
+            else {
+                // control flow statements
+                if (currentChunk) {
+                    chunks.push(currentChunk.stmts);
+                    currentChunk = undefined;
+                }
+                chunks.push([stmt]);
+            }
+        });
+        if (currentChunk) {
+            chunks.push(currentChunk.stmts);
+        }
+        return chunks;
+    }
 }
 exports.Block = Block;
+function areChunksEquivalent(chunk1, chunk2, ec) {
+    return constructs_1.areAllSemanticallyEquivalent(chunk1, chunk2, ec) || constructs_1.areAllSemanticallyEquivalent(chunk1, chunk2.slice().reverse(), ec);
+}
 class RuntimeBlock extends RuntimeStatement {
     constructor(model, parent) {
         super(model, parent);
@@ -58255,7 +58932,11 @@ class IfStatement extends Statement {
         // (If the substatement is a block, it creates its own block context, so we don't do that here.)
         let then = ast.then.construct_type === "block" ?
             createStatementFromAST(ast.then, context) :
-            createStatementFromAST(ast.then, constructs_1.createBlockContext(context));
+            createStatementFromAST({
+                construct_type: "block",
+                source: ast.then.source,
+                statements: [ast.then]
+            }, context);
         if (!ast.otherwise) { // no else branch
             return new IfStatement(context, ast, condition, then);
         }
@@ -58263,12 +58944,48 @@ class IfStatement extends Statement {
             // See note above about substatement implicit block context
             let otherwise = ast.otherwise.construct_type === "block" ?
                 createStatementFromAST(ast.otherwise, context) :
-                createStatementFromAST(ast.otherwise, constructs_1.createBlockContext(context));
+                createStatementFromAST({
+                    construct_type: "block",
+                    source: ast.then.source,
+                    statements: [ast.otherwise]
+                }, context);
             return new IfStatement(context, ast, condition, then, otherwise);
         }
     }
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.IfStatementOutlet(element, this, parent);
+    }
+    //     isTailChild : function(child){
+    //         if (child === this.condition){
+    //             return {isTail: false,
+    //                 reason: "After the function returns, one of the branches will run.",
+    //                 others: [this.then, this.otherwise]
+    //             }
+    //         }
+    //         else{
+    //             if (this.otherwise){
+    //                 //if (child === this.then){
+    //                     return {isTail: true,
+    //                         reason: "Only one branch in an if/else structure can ever execute, so don't worry about the code in the other branches."
+    //                     };
+    //                 //}
+    //                 //else{
+    //                 //    return {isTail: true,
+    //                 //        reason: "Don't worry about the code in the if branch - if the recursive call even happened it means we took the else branch."
+    //                 //    };
+    //                 //}
+    //             }
+    //             else{
+    //                 return {isTail: true
+    //                 };
+    //             }
+    //         }
+    //     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areSemanticallyEquivalent(this.condition, other.condition, equivalenceContext)
+            && constructs_1.areSemanticallyEquivalent(this.then, other.then, equivalenceContext)
+            && constructs_1.areSemanticallyEquivalent(this.otherwise, other.otherwise, equivalenceContext);
     }
 }
 exports.IfStatement = IfStatement;
@@ -58332,6 +59049,11 @@ class WhileStatement extends Statement {
     }
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.WhileStatementOutlet(element, this, parent);
+    }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areSemanticallyEquivalent(this.condition, other.condition, equivalenceContext)
+            && constructs_1.areSemanticallyEquivalent(this.body, other.body, equivalenceContext);
     }
 }
 exports.WhileStatement = WhileStatement;
@@ -58497,6 +59219,13 @@ class ForStatement extends Statement {
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.ForStatementOutlet(element, this, parent);
     }
+    isSemanticallyEquivalent_impl(other, equivalenceContext) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areSemanticallyEquivalent(this.initial, other.initial, equivalenceContext)
+            && constructs_1.areSemanticallyEquivalent(this.condition, other.condition, equivalenceContext)
+            && constructs_1.areSemanticallyEquivalent(this.body, other.body, equivalenceContext)
+            && constructs_1.areSemanticallyEquivalent(this.post, other.post, equivalenceContext);
+    }
 }
 exports.ForStatement = ForStatement;
 class RuntimeForStatement extends RuntimeStatement {
@@ -58601,6 +59330,7 @@ exports.ArrayPointerType = exports.PointerType = exports.toHexadecimalString = e
 exports.builtInTypes = exports.isBuiltInTypeName = exports.FunctionType = exports.createClassType = exports.ArrayOfUnknownBoundType = exports.BoundedArrayType = exports.peelReference = exports.ReferenceType = exports.ObjectPointerType = void 0;
 const util_1 = __webpack_require__(6560);
 const runtimeEnvironment_1 = __webpack_require__(5320);
+const lexical_1 = __webpack_require__(2018);
 var vowels = ["a", "e", "i", "o", "u"];
 function isVowel(c) {
     return vowels.indexOf(c) != -1;
@@ -58617,12 +59347,14 @@ function isType(typeOrCtor, ctor) {
 exports.isType = isType;
 ;
 function sameType(type1, type2) {
-    return type1.sameType(type2);
+    // console.log(`comparing ${type1} and ${type2}`);
+    // console.log(!!(type1 === type2 || type1 && type2 && type1.sameType(type2)));
+    return !!(type1 === type2 || type1 && type2 && type1.sameType(type2));
 }
 exports.sameType = sameType;
 ;
 function similarType(type1, type2) {
-    return type1.similarType(type2);
+    return !!(type1 === type2 || type1 && type2 && type1.similarType(type2));
 }
 exports.similarType = similarType;
 ;
@@ -59682,7 +60414,7 @@ class ClassTypeBase extends TypeBase {
 function sameClassType(thisClass, otherClass) {
     // Note the any casts are to grant "friend" access to private members of ClassTypeBase
     return thisClass.classId === otherClass.classId
-        || thisClass.qualifiedName === otherClass.qualifiedName
+        || lexical_1.qualifiedNamesEq(thisClass.qualifiedName, otherClass.qualifiedName)
         || (!!thisClass.shared.classDefinition && thisClass.shared.classDefinition === otherClass.shared.classDefinition);
 }
 let nextClassId = 0;
@@ -64043,214 +64775,218 @@ function peg$parse(input, options) {
     };
     const peg$c317 = function (postfixes) { return { postfixes: postfixes }; };
     const peg$c318 = function (p) { return p; };
-    const peg$c319 = function (args) { return { construct_type: "direct_initializer", args: args || [] }; };
-    const peg$c320 = "delete";
-    const peg$c321 = peg$literalExpectation("delete", false);
-    const peg$c322 = function (t) {
+    const peg$c319 = function () { return { construct_type: "value_initializer" }; };
+    const peg$c320 = function (args) { return { construct_type: "direct_initializer", args: args || [] }; };
+    const peg$c321 = "delete";
+    const peg$c322 = peg$literalExpectation("delete", false);
+    const peg$c323 = function (t) {
         return track({ construct_type: "delete_expression", operand: t }, location(), text());
     };
-    const peg$c323 = function (t) {
+    const peg$c324 = function (t) {
         return track({ construct_type: "delete_array_expression", operand: t }, location(), text());
     };
-    const peg$c324 = "static_cast";
-    const peg$c325 = peg$literalExpectation("static_cast", false);
-    const peg$c326 = function (t, sub) { return track({ construct_type: "static_cast_expression", type: t, operand: sub }, location(), text()); };
-    const peg$c327 = "dynamic_cast";
-    const peg$c328 = peg$literalExpectation("dynamic_cast", false);
-    const peg$c329 = function (t, sub) { return track({ construct_type: "dynamic_cast_expression", type: t, operand: sub }, location(), text()); };
-    const peg$c330 = "reinterpret_cast";
-    const peg$c331 = peg$literalExpectation("reinterpret_cast", false);
-    const peg$c332 = function (t, sub) { return track({ construct_type: "reinterpret_cast_expression", type: t, operand: sub }, location(), text()); };
-    const peg$c333 = "const_cast";
-    const peg$c334 = peg$literalExpectation("const_cast", false);
-    const peg$c335 = function (t, sub) { return track({ construct_type: "const_cast_expression", type: t, operand: sub }, location(), text()); };
-    const peg$c336 = function (sub, op) { return op; };
-    const peg$c337 = function (sub, ops) { return ops.length > 0 ? track(postfixExp(ops, sub), location(), text()) : sub; };
-    const peg$c338 = function (sub) { return track({ construct_type: "subscript_expression", offset: sub }, location(), text()); };
-    const peg$c339 = function (args) { return track({ construct_type: "function_call_expression", args: args || [] }, location(), text()); };
-    const peg$c340 = ".";
-    const peg$c341 = peg$literalExpectation(".", false);
-    const peg$c342 = function (mem) { return track({ construct_type: "dot_expression", member: mem }, location(), text()); };
-    const peg$c343 = "->";
-    const peg$c344 = peg$literalExpectation("->", false);
-    const peg$c345 = function (mem) { return track({ construct_type: "arrow_expression", member: mem }, location(), text()); };
-    const peg$c346 = function () { return track({ construct_type: "postfix_increment_expression", operator: "++" }, location(), text()); };
-    const peg$c347 = function () { return track({ construct_type: "postfix_increment_expression", operator: "--" }, location(), text()); };
-    const peg$c348 = function (type, args) {
+    const peg$c325 = "static_cast";
+    const peg$c326 = peg$literalExpectation("static_cast", false);
+    const peg$c327 = function (t, sub) { return track({ construct_type: "static_cast_expression", type: t, operand: sub }, location(), text()); };
+    const peg$c328 = "dynamic_cast";
+    const peg$c329 = peg$literalExpectation("dynamic_cast", false);
+    const peg$c330 = function (t, sub) { return track({ construct_type: "dynamic_cast_expression", type: t, operand: sub }, location(), text()); };
+    const peg$c331 = "reinterpret_cast";
+    const peg$c332 = peg$literalExpectation("reinterpret_cast", false);
+    const peg$c333 = function (t, sub) { return track({ construct_type: "reinterpret_cast_expression", type: t, operand: sub }, location(), text()); };
+    const peg$c334 = "const_cast";
+    const peg$c335 = peg$literalExpectation("const_cast", false);
+    const peg$c336 = function (t, sub) { return track({ construct_type: "const_cast_expression", type: t, operand: sub }, location(), text()); };
+    const peg$c337 = function (sub, op) { return op; };
+    const peg$c338 = function (sub, ops) { return ops.length > 0 ? track(postfixExp(ops, sub), location(), text()) : sub; };
+    const peg$c339 = function (sub) { return track({ construct_type: "subscript_expression", offset: sub }, location(), text()); };
+    const peg$c340 = function (args) { return track({ construct_type: "function_call_expression", args: args || [] }, location(), text()); };
+    const peg$c341 = ".";
+    const peg$c342 = peg$literalExpectation(".", false);
+    const peg$c343 = function (mem) { return track({ construct_type: "dot_expression", member: mem }, location(), text()); };
+    const peg$c344 = "->";
+    const peg$c345 = peg$literalExpectation("->", false);
+    const peg$c346 = function (mem) { return track({ construct_type: "arrow_expression", member: mem }, location(), text()); };
+    const peg$c347 = function () { return track({ construct_type: "postfix_increment_expression", operator: "++" }, location(), text()); };
+    const peg$c348 = function () { return track({ construct_type: "postfix_increment_expression", operator: "--" }, location(), text()); };
+    const peg$c349 = function (type, args) {
         return track({ construct_type: "construct_expression", type: type, args: args || [] }, location(), text());
     };
-    const peg$c349 = function (first, e) { return e; };
-    const peg$c350 = function (sub) { return track({ construct_type: "parentheses_expression", subexpression: sub }, location(), text()); };
-    const peg$c351 = "this";
-    const peg$c352 = peg$literalExpectation("this", false);
-    const peg$c353 = function () { return track({ construct_type: "this_expression" }, location(), text()); };
-    const peg$c354 = "nullptr";
-    const peg$c355 = peg$literalExpectation("nullptr", false);
-    const peg$c356 = function () { return track({ construct_type: "nullptr_expression" }, location(), text()); };
-    const peg$c357 = "NULL";
-    const peg$c358 = peg$literalExpectation("NULL", false);
-    const peg$c359 = function (id) { return track({ construct_type: "identifier_expression", identifier: id }, location(), text()); };
-    const peg$c360 = function (n) { return KEYWORDS.has(n.identifier); };
-    const peg$c361 = function (n) { return n; };
-    const peg$c362 = function (n) { return { construct_type: "unqualified_identifier", identifier: "~" + n.identifier }; };
-    const peg$c363 = function (n, u) {
+    const peg$c350 = function (first, e) { return e; };
+    const peg$c351 = function (sub) { return track({ construct_type: "parentheses_expression", subexpression: sub }, location(), text()); };
+    const peg$c352 = "this";
+    const peg$c353 = peg$literalExpectation("this", false);
+    const peg$c354 = function () { return track({ construct_type: "this_expression" }, location(), text()); };
+    const peg$c355 = "nullptr";
+    const peg$c356 = peg$literalExpectation("nullptr", false);
+    const peg$c357 = function () { return track({ construct_type: "nullptr_expression" }, location(), text()); };
+    const peg$c358 = "NULL";
+    const peg$c359 = peg$literalExpectation("NULL", false);
+    const peg$c360 = function (id) { return track({ construct_type: "identifier_expression", identifier: id }, location(), text()); };
+    const peg$c361 = function (n) { return KEYWORDS.has(n.identifier); };
+    const peg$c362 = function (n) { return n; };
+    const peg$c363 = function (n) { return { construct_type: "unqualified_identifier", identifier: "~" + n.identifier }; };
+    const peg$c364 = function (n, u) {
         n.push(u);
         return { construct_type: "qualified_identifier", components: n };
     };
-    const peg$c364 = "::";
-    const peg$c365 = peg$literalExpectation("::", false);
-    const peg$c366 = function (id) { return id; };
-    const peg$c367 = function () { return []; };
-    const peg$c368 = function (id) { return track({ identifier: id }, location(), text()); };
-    const peg$c369 = "operator";
-    const peg$c370 = peg$literalExpectation("operator", false);
-    const peg$c371 = function (op) { return track({ construct_type: "unqualified_identifier", identifier: "operator" + op, operator: op }, location(), text()); };
-    const peg$c372 = "new[]";
-    const peg$c373 = peg$literalExpectation("new[]", false);
-    const peg$c374 = "delete[]";
-    const peg$c375 = peg$literalExpectation("delete[]", false);
-    const peg$c376 = "()";
-    const peg$c377 = peg$literalExpectation("()", false);
-    const peg$c378 = "[]";
-    const peg$c379 = peg$literalExpectation("[]", false);
-    const peg$c380 = "?:";
-    const peg$c381 = peg$literalExpectation("?:", false);
-    const peg$c382 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "float", value: lit }, location(), text()); };
-    const peg$c383 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "int", value: lit }, location(), text()); };
-    const peg$c384 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "char", value: lit }, location(), text()); };
-    const peg$c385 = function (lit) { return track({ construct_type: "string_literal_expression", type: "string", value: lit }, location(), text()); };
-    const peg$c386 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "bool", value: lit }, location(), text()); };
-    const peg$c387 = /^[0-9]/;
-    const peg$c388 = peg$classExpectation([["0", "9"]], false, false);
-    const peg$c389 = function (neg, digits) { return parseInt((neg ? neg : "") + digits.join("")); };
-    const peg$c390 = /^[0-9.]/;
-    const peg$c391 = peg$classExpectation([["0", "9"], "."], false, false);
-    const peg$c392 = function (neg, digits) { return digits.indexOf(".") == digits.lastIndexOf(".") && digits.indexOf(".") != -1; };
-    const peg$c393 = function (neg, digits) { return parseFloat((neg ? neg : "") + digits.join("")); };
-    const peg$c394 = "'";
-    const peg$c395 = peg$literalExpectation("'", false);
-    const peg$c396 = /^[^'\\\n]/;
-    const peg$c397 = peg$classExpectation(["'", "\\", "\n"], true, false);
-    const peg$c398 = function (char) { return char; };
-    const peg$c399 = "\"";
-    const peg$c400 = peg$literalExpectation("\"", false);
-    const peg$c401 = /^[^"\\\n]/;
-    const peg$c402 = peg$classExpectation(["\"", "\\", "\n"], true, false);
-    const peg$c403 = function (chars) { return chars.join(""); };
-    const peg$c404 = "true";
-    const peg$c405 = peg$literalExpectation("true", false);
-    const peg$c406 = function () { return true; };
-    const peg$c407 = "false";
-    const peg$c408 = peg$literalExpectation("false", false);
-    const peg$c409 = function () { return false; };
-    const peg$c410 = "\\\"";
-    const peg$c411 = peg$literalExpectation("\\\"", false);
-    const peg$c412 = "\\'";
-    const peg$c413 = peg$literalExpectation("\\'", false);
-    const peg$c414 = "\\?";
-    const peg$c415 = peg$literalExpectation("\\?", false);
-    const peg$c416 = "\\\\";
-    const peg$c417 = peg$literalExpectation("\\\\", false);
-    const peg$c418 = "\\a";
-    const peg$c419 = peg$literalExpectation("\\a", false);
-    const peg$c420 = "\\b";
-    const peg$c421 = peg$literalExpectation("\\b", false);
-    const peg$c422 = "\\f";
-    const peg$c423 = peg$literalExpectation("\\f", false);
-    const peg$c424 = "\\n";
-    const peg$c425 = peg$literalExpectation("\\n", false);
-    const peg$c426 = "\\r";
-    const peg$c427 = peg$literalExpectation("\\r", false);
-    const peg$c428 = "\\t";
-    const peg$c429 = peg$literalExpectation("\\t", false);
-    const peg$c430 = "\\v";
-    const peg$c431 = peg$literalExpectation("\\v", false);
-    const peg$c432 = "\\0";
-    const peg$c433 = peg$literalExpectation("\\0", false);
-    const peg$c434 = /^[0-8]/;
-    const peg$c435 = peg$classExpectation([["0", "8"]], false, false);
-    const peg$c436 = peg$otherExpectation("identifier");
-    const peg$c437 = function (first, rest) { return track({ construct_type: "unqualified_identifier", identifier: first + rest.join("") }, location(), text()); };
-    const peg$c438 = /^[a-zA-Z0-9_]/;
-    const peg$c439 = peg$classExpectation([["a", "z"], ["A", "Z"], ["0", "9"], "_"], false, false);
-    const peg$c440 = /^[a-zA-Z_]/;
-    const peg$c441 = peg$classExpectation([["a", "z"], ["A", "Z"], "_"], false, false);
-    const peg$c442 = function (id, t) { return { identifier: id.identifier + "<" + t.identifier + ">" }; };
-    const peg$c443 = "@";
-    const peg$c444 = peg$literalExpectation("@", false);
-    const peg$c445 = /^[a-zA-Z_0-9~]/;
-    const peg$c446 = peg$classExpectation([["a", "z"], ["A", "Z"], "_", ["0", "9"], "~"], false, false);
-    const peg$c447 = function (id) { return track({ construct_type: "opaque_expression", id: id.join("") }, location(), text()); };
-    const peg$c448 = peg$otherExpectation("optional whitespace");
-    const peg$c449 = /^[ \t\n\r]/;
-    const peg$c450 = peg$classExpectation([" ", "\t", "\n", "\r"], false, false);
-    const peg$c451 = peg$otherExpectation("whitespace");
-    const peg$c452 = function (id) { return isUserTypeName(id.identifier); };
-    const peg$c453 = function (head) {
+    const peg$c365 = "::";
+    const peg$c366 = peg$literalExpectation("::", false);
+    const peg$c367 = function (id) { return id; };
+    const peg$c368 = function () { return []; };
+    const peg$c369 = function (id) { return track({ identifier: id }, location(), text()); };
+    const peg$c370 = "operator";
+    const peg$c371 = peg$literalExpectation("operator", false);
+    const peg$c372 = function (op) { return track({ construct_type: "unqualified_identifier", identifier: "operator" + op, operator: op }, location(), text()); };
+    const peg$c373 = "new[]";
+    const peg$c374 = peg$literalExpectation("new[]", false);
+    const peg$c375 = "delete[]";
+    const peg$c376 = peg$literalExpectation("delete[]", false);
+    const peg$c377 = "()";
+    const peg$c378 = peg$literalExpectation("()", false);
+    const peg$c379 = "[]";
+    const peg$c380 = peg$literalExpectation("[]", false);
+    const peg$c381 = "?:";
+    const peg$c382 = peg$literalExpectation("?:", false);
+    const peg$c383 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "float", value: lit }, location(), text()); };
+    const peg$c384 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "int", value: lit }, location(), text()); };
+    const peg$c385 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "char", value: lit }, location(), text()); };
+    const peg$c386 = function (lit) { return track({ construct_type: "string_literal_expression", type: "string", value: lit }, location(), text()); };
+    const peg$c387 = function (lit) { return track({ construct_type: "numeric_literal_expression", type: "bool", value: lit }, location(), text()); };
+    const peg$c388 = /^[0-9]/;
+    const peg$c389 = peg$classExpectation([["0", "9"]], false, false);
+    const peg$c390 = function (neg, digits) { return parseInt((neg ? neg : "") + digits.join("")); };
+    const peg$c391 = /^[0-9.]/;
+    const peg$c392 = peg$classExpectation([["0", "9"], "."], false, false);
+    const peg$c393 = function (neg, digits) { return digits.indexOf(".") == digits.lastIndexOf(".") && digits.indexOf(".") != -1; };
+    const peg$c394 = function (neg, digits) { return parseFloat((neg ? neg : "") + digits.join("")); };
+    const peg$c395 = "'";
+    const peg$c396 = peg$literalExpectation("'", false);
+    const peg$c397 = /^[^'\\\n]/;
+    const peg$c398 = peg$classExpectation(["'", "\\", "\n"], true, false);
+    const peg$c399 = function (char) { return char; };
+    const peg$c400 = "\"";
+    const peg$c401 = peg$literalExpectation("\"", false);
+    const peg$c402 = /^[^"\\\n]/;
+    const peg$c403 = peg$classExpectation(["\"", "\\", "\n"], true, false);
+    const peg$c404 = function (chars) { return chars.join(""); };
+    const peg$c405 = "true";
+    const peg$c406 = peg$literalExpectation("true", false);
+    const peg$c407 = function () { return true; };
+    const peg$c408 = "false";
+    const peg$c409 = peg$literalExpectation("false", false);
+    const peg$c410 = function () { return false; };
+    const peg$c411 = "\\\"";
+    const peg$c412 = peg$literalExpectation("\\\"", false);
+    const peg$c413 = "\\'";
+    const peg$c414 = peg$literalExpectation("\\'", false);
+    const peg$c415 = "\\?";
+    const peg$c416 = peg$literalExpectation("\\?", false);
+    const peg$c417 = "\\\\";
+    const peg$c418 = peg$literalExpectation("\\\\", false);
+    const peg$c419 = "\\a";
+    const peg$c420 = peg$literalExpectation("\\a", false);
+    const peg$c421 = "\\b";
+    const peg$c422 = peg$literalExpectation("\\b", false);
+    const peg$c423 = "\\f";
+    const peg$c424 = peg$literalExpectation("\\f", false);
+    const peg$c425 = "\\n";
+    const peg$c426 = peg$literalExpectation("\\n", false);
+    const peg$c427 = "\\r";
+    const peg$c428 = peg$literalExpectation("\\r", false);
+    const peg$c429 = "\\t";
+    const peg$c430 = peg$literalExpectation("\\t", false);
+    const peg$c431 = "\\v";
+    const peg$c432 = peg$literalExpectation("\\v", false);
+    const peg$c433 = "\\0";
+    const peg$c434 = peg$literalExpectation("\\0", false);
+    const peg$c435 = /^[0-8]/;
+    const peg$c436 = peg$classExpectation([["0", "8"]], false, false);
+    const peg$c437 = peg$otherExpectation("identifier");
+    const peg$c438 = function (first, rest) { return track({ construct_type: "unqualified_identifier", identifier: first + rest.join("") }, location(), text()); };
+    const peg$c439 = /^[a-zA-Z0-9_]/;
+    const peg$c440 = peg$classExpectation([["a", "z"], ["A", "Z"], ["0", "9"], "_"], false, false);
+    const peg$c441 = /^[a-zA-Z_]/;
+    const peg$c442 = peg$classExpectation([["a", "z"], ["A", "Z"], "_"], false, false);
+    const peg$c443 = function (id, t) { return { identifier: id.identifier + "<" + t.identifier + ">" }; };
+    const peg$c444 = "@";
+    const peg$c445 = peg$literalExpectation("@", false);
+    const peg$c446 = /^[a-zA-Z_0-9~]/;
+    const peg$c447 = peg$classExpectation([["a", "z"], ["A", "Z"], "_", ["0", "9"], "~"], false, false);
+    const peg$c448 = function (id) { return track({ construct_type: "opaque_expression", id: id.join("") }, location(), text()); };
+    const peg$c449 = peg$otherExpectation("optional whitespace");
+    const peg$c450 = /^[ \t\n\r]/;
+    const peg$c451 = peg$classExpectation([" ", "\t", "\n", "\r"], false, false);
+    const peg$c452 = peg$otherExpectation("whitespace");
+    const peg$c453 = function (id) { return isUserTypeName(id.identifier); };
+    const peg$c454 = function (head) {
         classNameStack.push(head.name.identifier);
         getUserTypeNames()[head.name.identifier] = true;
         return true;
     };
-    const peg$c454 = function (head, mems) {
+    const peg$c455 = function (head, mems) {
         classNameStack.pop();
         return track({ construct_type: "class_definition", head: head, memberSpecs: mems }, location(), text());
     };
-    const peg$c455 = function (head) { classNameStack.pop(); return false; };
-    const peg$c456 = function (key, name, b) { return b; };
-    const peg$c457 = function (key, name, bases) { return track({ construct_type: "class_head", classKey: key, name: name, bases: bases !== null && bases !== void 0 ? bases : [] }, location(), text()); };
-    const peg$c458 = "class";
-    const peg$c459 = peg$literalExpectation("class", false);
-    const peg$c460 = "struct";
-    const peg$c461 = peg$literalExpectation("struct", false);
-    const peg$c462 = "union";
-    const peg$c463 = peg$literalExpectation("union", false);
-    const peg$c464 = function (access, m) { return m; };
-    const peg$c465 = function (access, members) { return track({ construct_type: "member_specification", members: members, access: access }, location(), text()); };
-    const peg$c466 = function (m) { return m; };
-    const peg$c467 = function (members) { return track({ construct_type: "member_specification", members: members }, location(), text()); };
-    const peg$c468 = "private";
-    const peg$c469 = peg$literalExpectation("private", false);
-    const peg$c470 = "protected";
-    const peg$c471 = peg$literalExpectation("protected", false);
-    const peg$c472 = "public";
-    const peg$c473 = peg$literalExpectation("public", false);
-    const peg$c474 = function (specs, declarators) {
+    const peg$c456 = function (head) { classNameStack.pop(); return false; };
+    const peg$c457 = function (key, name, b) { return b; };
+    const peg$c458 = function (key, name, bases) { return track({ construct_type: "class_head", classKey: key, name: name, bases: bases !== null && bases !== void 0 ? bases : [] }, location(), text()); };
+    const peg$c459 = "class";
+    const peg$c460 = peg$literalExpectation("class", false);
+    const peg$c461 = "struct";
+    const peg$c462 = peg$literalExpectation("struct", false);
+    const peg$c463 = "union";
+    const peg$c464 = peg$literalExpectation("union", false);
+    const peg$c465 = function (access, m) { return m; };
+    const peg$c466 = function (access, members) { return track({ construct_type: "member_specification", members: members, access: access }, location(), text()); };
+    const peg$c467 = function (m) { return m; };
+    const peg$c468 = function (members) { return track({ construct_type: "member_specification", members: members }, location(), text()); };
+    const peg$c469 = "private";
+    const peg$c470 = peg$literalExpectation("private", false);
+    const peg$c471 = "protected";
+    const peg$c472 = peg$literalExpectation("protected", false);
+    const peg$c473 = "public";
+    const peg$c474 = peg$literalExpectation("public", false);
+    const peg$c475 = function (specs, declarators) {
         return track({ construct_type: "simple_member_declaration", specs: specs, declarators: declarators }, location(), text());
     };
-    const peg$c475 = function (declarators) {
+    const peg$c476 = function (declarators) {
         return track({ construct_type: "simple_member_declaration", specs: emptyDeclSpecs, declarators: declarators }, location(), text());
     };
-    const peg$c476 = function (f) { return f; };
-    const peg$c477 = "0";
-    const peg$c478 = peg$literalExpectation("0", false);
-    const peg$c479 = function (d) { d.pureVirtual = true; return d; };
-    const peg$c480 = function (d) { d.library_unsupported = true; return d; };
-    const peg$c481 = function (d, i) { d.initializer = i; return d; };
-    const peg$c482 = function (d, v) { return v; };
-    const peg$c483 = function (d, v, i) {
+    const peg$c477 = function (f) { return f; };
+    const peg$c478 = "0";
+    const peg$c479 = peg$literalExpectation("0", false);
+    const peg$c480 = function (d) { d.pureVirtual = true; return d; };
+    const peg$c481 = function (d) { d.library_unsupported = true; return d; };
+    const peg$c482 = function (d, i) { d.initializer = i; return d; };
+    const peg$c483 = function (d, v) { return v; };
+    const peg$c484 = function (d, v, i) {
         d[v] = true;
         d.initializer = i;
         return d;
     };
-    const peg$c484 = function (d, v) { d[v] = true; return d; };
-    const peg$c485 = "override";
-    const peg$c486 = peg$literalExpectation("override", false);
-    const peg$c487 = function (b) { return b; };
-    const peg$c488 = function (first, b) { return b; };
-    const peg$c489 = function (a) { return a; };
-    const peg$c490 = function (a, c) {
+    const peg$c485 = function (d, v) { d[v] = true; return d; };
+    const peg$c486 = "override";
+    const peg$c487 = peg$literalExpectation("override", false);
+    const peg$c488 = function (b) { return b; };
+    const peg$c489 = function (first, b) { return b; };
+    const peg$c490 = function (a) { return a; };
+    const peg$c491 = function (a, c) {
         return track({ construct_type: "base_specifier", name: c, virtual: true, access: a }, location(), text());
     };
-    const peg$c491 = function (a, c) {
+    const peg$c492 = function (a, c) {
         return track({ construct_type: "base_specifier", name: c, access: a }, location(), text());
     };
-    const peg$c492 = function (c) {
+    const peg$c493 = function (c) {
         return track({ construct_type: "base_specifier", name: c }, location(), text());
     };
-    const peg$c493 = function (n, c) {
+    const peg$c494 = function (n, c) {
         n.push(c);
         return { construct_type: "qualified_identifier", components: n };
     };
+    const peg$c495 = "@anything@";
+    const peg$c496 = peg$literalExpectation("@anything@", false);
+    const peg$c497 = function () { return track({ construct_type: "anything_construct" }, location(), text()); };
     let peg$currPos = 0;
     let peg$savedPos = 0;
     const peg$posDetailsCache = [{ line: 1, column: 1 }];
@@ -64737,6 +65473,9 @@ function peg$parse(input, options) {
                                 s0 = peg$parseexpression_statement();
                                 if (s0 === peg$FAILED) {
                                     s0 = peg$parsenull_statement();
+                                    if (s0 === peg$FAILED) {
+                                        s0 = peg$parseanything();
+                                    }
                                 }
                             }
                         }
@@ -72904,27 +73643,76 @@ function peg$parse(input, options) {
         if (s1 !== peg$FAILED) {
             s2 = peg$parsews();
             if (s2 !== peg$FAILED) {
-                s3 = peg$parseexp_list();
-                if (s3 === peg$FAILED) {
-                    s3 = null;
+                if (input.charCodeAt(peg$currPos) === 41) {
+                    s3 = peg$c40;
+                    peg$currPos++;
+                }
+                else {
+                    s3 = peg$FAILED;
+                    if (peg$silentFails === 0) {
+                        peg$fail(peg$c41);
+                    }
                 }
                 if (s3 !== peg$FAILED) {
-                    s4 = peg$parsews();
-                    if (s4 !== peg$FAILED) {
-                        if (input.charCodeAt(peg$currPos) === 41) {
-                            s5 = peg$c40;
-                            peg$currPos++;
-                        }
-                        else {
-                            s5 = peg$FAILED;
-                            if (peg$silentFails === 0) {
-                                peg$fail(peg$c41);
+                    peg$savedPos = s0;
+                    s1 = peg$c319();
+                    s0 = s1;
+                }
+                else {
+                    peg$currPos = s0;
+                    s0 = peg$FAILED;
+                }
+            }
+            else {
+                peg$currPos = s0;
+                s0 = peg$FAILED;
+            }
+        }
+        else {
+            peg$currPos = s0;
+            s0 = peg$FAILED;
+        }
+        if (s0 === peg$FAILED) {
+            s0 = peg$currPos;
+            if (input.charCodeAt(peg$currPos) === 40) {
+                s1 = peg$c38;
+                peg$currPos++;
+            }
+            else {
+                s1 = peg$FAILED;
+                if (peg$silentFails === 0) {
+                    peg$fail(peg$c39);
+                }
+            }
+            if (s1 !== peg$FAILED) {
+                s2 = peg$parsews();
+                if (s2 !== peg$FAILED) {
+                    s3 = peg$parseexp_list();
+                    if (s3 === peg$FAILED) {
+                        s3 = null;
+                    }
+                    if (s3 !== peg$FAILED) {
+                        s4 = peg$parsews();
+                        if (s4 !== peg$FAILED) {
+                            if (input.charCodeAt(peg$currPos) === 41) {
+                                s5 = peg$c40;
+                                peg$currPos++;
                             }
-                        }
-                        if (s5 !== peg$FAILED) {
-                            peg$savedPos = s0;
-                            s1 = peg$c319(s3);
-                            s0 = s1;
+                            else {
+                                s5 = peg$FAILED;
+                                if (peg$silentFails === 0) {
+                                    peg$fail(peg$c41);
+                                }
+                            }
+                            if (s5 !== peg$FAILED) {
+                                peg$savedPos = s0;
+                                s1 = peg$c320(s3);
+                                s0 = s1;
+                            }
+                            else {
+                                peg$currPos = s0;
+                                s0 = peg$FAILED;
+                            }
                         }
                         else {
                             peg$currPos = s0;
@@ -72946,23 +73734,19 @@ function peg$parse(input, options) {
                 s0 = peg$FAILED;
             }
         }
-        else {
-            peg$currPos = s0;
-            s0 = peg$FAILED;
-        }
         return s0;
     }
     function peg$parseexp_delete() {
         let s0, s1, s2, s3, s4, s5, s6, s7;
         s0 = peg$currPos;
-        if (input.substr(peg$currPos, 6) === peg$c320) {
-            s1 = peg$c320;
+        if (input.substr(peg$currPos, 6) === peg$c321) {
+            s1 = peg$c321;
             peg$currPos += 6;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c321);
+                peg$fail(peg$c322);
             }
         }
         if (s1 !== peg$FAILED) {
@@ -72971,7 +73755,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseexp_cast();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c322(s3);
+                    s1 = peg$c323(s3);
                     s0 = s1;
                 }
                 else {
@@ -72990,14 +73774,14 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (input.substr(peg$currPos, 6) === peg$c320) {
-                s1 = peg$c320;
+            if (input.substr(peg$currPos, 6) === peg$c321) {
+                s1 = peg$c321;
                 peg$currPos += 6;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c321);
+                    peg$fail(peg$c322);
                 }
             }
             if (s1 !== peg$FAILED) {
@@ -73032,7 +73816,7 @@ function peg$parse(input, options) {
                                     s7 = peg$parseexp_cast();
                                     if (s7 !== peg$FAILED) {
                                         peg$savedPos = s0;
-                                        s1 = peg$c323(s7);
+                                        s1 = peg$c324(s7);
                                         s0 = s1;
                                     }
                                     else {
@@ -73078,14 +73862,14 @@ function peg$parse(input, options) {
     function peg$parseexp_postfix() {
         let s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13;
         s0 = peg$currPos;
-        if (input.substr(peg$currPos, 11) === peg$c324) {
-            s1 = peg$c324;
+        if (input.substr(peg$currPos, 11) === peg$c325) {
+            s1 = peg$c325;
             peg$currPos += 11;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c325);
+                peg$fail(peg$c326);
             }
         }
         if (s1 !== peg$FAILED) {
@@ -73150,7 +73934,7 @@ function peg$parse(input, options) {
                                                         }
                                                         if (s13 !== peg$FAILED) {
                                                             peg$savedPos = s0;
-                                                            s1 = peg$c326(s5, s11);
+                                                            s1 = peg$c327(s5, s11);
                                                             s0 = s1;
                                                         }
                                                         else {
@@ -73219,14 +74003,14 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (input.substr(peg$currPos, 12) === peg$c327) {
-                s1 = peg$c327;
+            if (input.substr(peg$currPos, 12) === peg$c328) {
+                s1 = peg$c328;
                 peg$currPos += 12;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c328);
+                    peg$fail(peg$c329);
                 }
             }
             if (s1 !== peg$FAILED) {
@@ -73291,7 +74075,7 @@ function peg$parse(input, options) {
                                                             }
                                                             if (s13 !== peg$FAILED) {
                                                                 peg$savedPos = s0;
-                                                                s1 = peg$c329(s5, s11);
+                                                                s1 = peg$c330(s5, s11);
                                                                 s0 = s1;
                                                             }
                                                             else {
@@ -73360,14 +74144,14 @@ function peg$parse(input, options) {
             }
             if (s0 === peg$FAILED) {
                 s0 = peg$currPos;
-                if (input.substr(peg$currPos, 16) === peg$c330) {
-                    s1 = peg$c330;
+                if (input.substr(peg$currPos, 16) === peg$c331) {
+                    s1 = peg$c331;
                     peg$currPos += 16;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c331);
+                        peg$fail(peg$c332);
                     }
                 }
                 if (s1 !== peg$FAILED) {
@@ -73432,7 +74216,7 @@ function peg$parse(input, options) {
                                                                 }
                                                                 if (s13 !== peg$FAILED) {
                                                                     peg$savedPos = s0;
-                                                                    s1 = peg$c332(s5, s11);
+                                                                    s1 = peg$c333(s5, s11);
                                                                     s0 = s1;
                                                                 }
                                                                 else {
@@ -73501,14 +74285,14 @@ function peg$parse(input, options) {
                 }
                 if (s0 === peg$FAILED) {
                     s0 = peg$currPos;
-                    if (input.substr(peg$currPos, 10) === peg$c333) {
-                        s1 = peg$c333;
+                    if (input.substr(peg$currPos, 10) === peg$c334) {
+                        s1 = peg$c334;
                         peg$currPos += 10;
                     }
                     else {
                         s1 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c334);
+                            peg$fail(peg$c335);
                         }
                     }
                     if (s1 !== peg$FAILED) {
@@ -73573,7 +74357,7 @@ function peg$parse(input, options) {
                                                                     }
                                                                     if (s13 !== peg$FAILED) {
                                                                         peg$savedPos = s0;
-                                                                        s1 = peg$c335(s5, s11);
+                                                                        s1 = peg$c336(s5, s11);
                                                                         s0 = s1;
                                                                     }
                                                                     else {
@@ -73654,7 +74438,7 @@ function peg$parse(input, options) {
                                 s5 = peg$parseop_postfix();
                                 if (s5 !== peg$FAILED) {
                                     peg$savedPos = s3;
-                                    s4 = peg$c336(s1, s5);
+                                    s4 = peg$c337(s1, s5);
                                     s3 = s4;
                                 }
                                 else {
@@ -73674,7 +74458,7 @@ function peg$parse(input, options) {
                                     s5 = peg$parseop_postfix();
                                     if (s5 !== peg$FAILED) {
                                         peg$savedPos = s3;
-                                        s4 = peg$c336(s1, s5);
+                                        s4 = peg$c337(s1, s5);
                                         s3 = s4;
                                     }
                                     else {
@@ -73689,7 +74473,7 @@ function peg$parse(input, options) {
                             }
                             if (s2 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c337(s1, s2);
+                                s1 = peg$c338(s1, s2);
                                 s0 = s1;
                             }
                             else {
@@ -73739,7 +74523,7 @@ function peg$parse(input, options) {
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c338(s3);
+                            s1 = peg$c339(s3);
                             s0 = s1;
                         }
                         else {
@@ -73800,7 +74584,7 @@ function peg$parse(input, options) {
                             }
                             if (s5 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c339(s3);
+                                s1 = peg$c340(s3);
                                 s0 = s1;
                             }
                             else {
@@ -73830,13 +74614,13 @@ function peg$parse(input, options) {
             if (s0 === peg$FAILED) {
                 s0 = peg$currPos;
                 if (input.charCodeAt(peg$currPos) === 46) {
-                    s1 = peg$c340;
+                    s1 = peg$c341;
                     peg$currPos++;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c341);
+                        peg$fail(peg$c342);
                     }
                 }
                 if (s1 !== peg$FAILED) {
@@ -73845,7 +74629,7 @@ function peg$parse(input, options) {
                         s3 = peg$parseid_expression();
                         if (s3 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c342(s3);
+                            s1 = peg$c343(s3);
                             s0 = s1;
                         }
                         else {
@@ -73864,14 +74648,14 @@ function peg$parse(input, options) {
                 }
                 if (s0 === peg$FAILED) {
                     s0 = peg$currPos;
-                    if (input.substr(peg$currPos, 2) === peg$c343) {
-                        s1 = peg$c343;
+                    if (input.substr(peg$currPos, 2) === peg$c344) {
+                        s1 = peg$c344;
                         peg$currPos += 2;
                     }
                     else {
                         s1 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c344);
+                            peg$fail(peg$c345);
                         }
                     }
                     if (s1 !== peg$FAILED) {
@@ -73880,7 +74664,7 @@ function peg$parse(input, options) {
                             s3 = peg$parseid_expression();
                             if (s3 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c345(s3);
+                                s1 = peg$c346(s3);
                                 s0 = s1;
                             }
                             else {
@@ -73911,7 +74695,7 @@ function peg$parse(input, options) {
                         }
                         if (s1 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c346();
+                            s1 = peg$c347();
                         }
                         s0 = s1;
                         if (s0 === peg$FAILED) {
@@ -73928,7 +74712,7 @@ function peg$parse(input, options) {
                             }
                             if (s1 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c347();
+                                s1 = peg$c348();
                             }
                             s0 = s1;
                         }
@@ -73977,7 +74761,7 @@ function peg$parse(input, options) {
                                 }
                                 if (s7 !== peg$FAILED) {
                                     peg$savedPos = s0;
-                                    s1 = peg$c348(s1, s5);
+                                    s1 = peg$c349(s1, s5);
                                     s0 = s1;
                                 }
                                 else {
@@ -74041,7 +74825,7 @@ function peg$parse(input, options) {
                         s7 = peg$parseexp_assn();
                         if (s7 !== peg$FAILED) {
                             peg$savedPos = s3;
-                            s4 = peg$c349(s1, s7);
+                            s4 = peg$c350(s1, s7);
                             s3 = s4;
                         }
                         else {
@@ -74084,7 +74868,7 @@ function peg$parse(input, options) {
                             s7 = peg$parseexp_assn();
                             if (s7 !== peg$FAILED) {
                                 peg$savedPos = s3;
-                                s4 = peg$c349(s1, s7);
+                                s4 = peg$c350(s1, s7);
                                 s3 = s4;
                             }
                             else {
@@ -74155,7 +74939,7 @@ function peg$parse(input, options) {
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c350(s3);
+                            s1 = peg$c351(s3);
                             s0 = s1;
                         }
                         else {
@@ -74186,14 +74970,14 @@ function peg$parse(input, options) {
             s0 = peg$parseliteral();
             if (s0 === peg$FAILED) {
                 s0 = peg$currPos;
-                if (input.substr(peg$currPos, 4) === peg$c351) {
-                    s1 = peg$c351;
+                if (input.substr(peg$currPos, 4) === peg$c352) {
+                    s1 = peg$c352;
                     peg$currPos += 4;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c352);
+                        peg$fail(peg$c353);
                     }
                 }
                 if (s1 !== peg$FAILED) {
@@ -74210,7 +74994,7 @@ function peg$parse(input, options) {
                     }
                     if (s2 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c353();
+                        s1 = peg$c354();
                         s0 = s1;
                     }
                     else {
@@ -74224,14 +75008,14 @@ function peg$parse(input, options) {
                 }
                 if (s0 === peg$FAILED) {
                     s0 = peg$currPos;
-                    if (input.substr(peg$currPos, 7) === peg$c354) {
-                        s1 = peg$c354;
+                    if (input.substr(peg$currPos, 7) === peg$c355) {
+                        s1 = peg$c355;
                         peg$currPos += 7;
                     }
                     else {
                         s1 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c355);
+                            peg$fail(peg$c356);
                         }
                     }
                     if (s1 !== peg$FAILED) {
@@ -74248,7 +75032,7 @@ function peg$parse(input, options) {
                         }
                         if (s2 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c356();
+                            s1 = peg$c357();
                             s0 = s1;
                         }
                         else {
@@ -74262,14 +75046,14 @@ function peg$parse(input, options) {
                     }
                     if (s0 === peg$FAILED) {
                         s0 = peg$currPos;
-                        if (input.substr(peg$currPos, 4) === peg$c357) {
-                            s1 = peg$c357;
+                        if (input.substr(peg$currPos, 4) === peg$c358) {
+                            s1 = peg$c358;
                             peg$currPos += 4;
                         }
                         else {
                             s1 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c358);
+                                peg$fail(peg$c359);
                             }
                         }
                         if (s1 !== peg$FAILED) {
@@ -74286,7 +75070,7 @@ function peg$parse(input, options) {
                             }
                             if (s2 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c356();
+                                s1 = peg$c357();
                                 s0 = s1;
                             }
                             else {
@@ -74303,11 +75087,14 @@ function peg$parse(input, options) {
                             s1 = peg$parseid_expression();
                             if (s1 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c359(s1);
+                                s1 = peg$c360(s1);
                             }
                             s0 = s1;
                             if (s0 === peg$FAILED) {
-                                s0 = peg$parseopaque_expression();
+                                s0 = peg$parseanything();
+                                if (s0 === peg$FAILED) {
+                                    s0 = peg$parseopaque_expression();
+                                }
                             }
                         }
                     }
@@ -74324,7 +75111,7 @@ function peg$parse(input, options) {
             s1 = peg$parseunqualified_id();
             if (s1 !== peg$FAILED) {
                 peg$savedPos = peg$currPos;
-                s2 = peg$c360(s1);
+                s2 = peg$c361(s1);
                 if (s2) {
                     s2 = peg$FAILED;
                 }
@@ -74333,7 +75120,7 @@ function peg$parse(input, options) {
                 }
                 if (s2 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c361(s1);
+                    s1 = peg$c362(s1);
                     s0 = s1;
                 }
                 else {
@@ -74369,7 +75156,7 @@ function peg$parse(input, options) {
                     s3 = peg$parseclass_name();
                     if (s3 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c362(s3);
+                        s1 = peg$c363(s3);
                         s0 = s1;
                     }
                     else {
@@ -74402,7 +75189,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseunqualified_id();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c363(s1, s3);
+                    s1 = peg$c364(s1, s3);
                     s0 = s1;
                 }
                 else {
@@ -74432,21 +75219,21 @@ function peg$parse(input, options) {
         if (s2 !== peg$FAILED) {
             s3 = peg$parsews();
             if (s3 !== peg$FAILED) {
-                if (input.substr(peg$currPos, 2) === peg$c364) {
-                    s4 = peg$c364;
+                if (input.substr(peg$currPos, 2) === peg$c365) {
+                    s4 = peg$c365;
                     peg$currPos += 2;
                 }
                 else {
                     s4 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c365);
+                        peg$fail(peg$c366);
                     }
                 }
                 if (s4 !== peg$FAILED) {
                     s5 = peg$parsews();
                     if (s5 !== peg$FAILED) {
                         peg$savedPos = s1;
-                        s2 = peg$c366(s2);
+                        s2 = peg$c367(s2);
                         s1 = s2;
                     }
                     else {
@@ -74479,21 +75266,21 @@ function peg$parse(input, options) {
                 if (s2 !== peg$FAILED) {
                     s3 = peg$parsews();
                     if (s3 !== peg$FAILED) {
-                        if (input.substr(peg$currPos, 2) === peg$c364) {
-                            s4 = peg$c364;
+                        if (input.substr(peg$currPos, 2) === peg$c365) {
+                            s4 = peg$c365;
                             peg$currPos += 2;
                         }
                         else {
                             s4 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c365);
+                                peg$fail(peg$c366);
                             }
                         }
                         if (s4 !== peg$FAILED) {
                             s5 = peg$parsews();
                             if (s5 !== peg$FAILED) {
                                 peg$savedPos = s1;
-                                s2 = peg$c366(s2);
+                                s2 = peg$c367(s2);
                                 s1 = s2;
                             }
                             else {
@@ -74522,21 +75309,21 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (input.substr(peg$currPos, 2) === peg$c364) {
-                s1 = peg$c364;
+            if (input.substr(peg$currPos, 2) === peg$c365) {
+                s1 = peg$c365;
                 peg$currPos += 2;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c365);
+                    peg$fail(peg$c366);
                 }
             }
             if (s1 !== peg$FAILED) {
                 s2 = peg$parsews();
                 if (s2 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c367();
+                    s1 = peg$c368();
                     s0 = s1;
                 }
                 else {
@@ -74557,7 +75344,7 @@ function peg$parse(input, options) {
         s1 = peg$parsesimple_type_name();
         if (s1 !== peg$FAILED) {
             peg$savedPos = s0;
-            s1 = peg$c368(s1);
+            s1 = peg$c369(s1);
         }
         s0 = s1;
         return s0;
@@ -74573,14 +75360,14 @@ function peg$parse(input, options) {
     function peg$parseoperator_function_id() {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
-        if (input.substr(peg$currPos, 8) === peg$c369) {
-            s1 = peg$c369;
+        if (input.substr(peg$currPos, 8) === peg$c370) {
+            s1 = peg$c370;
             peg$currPos += 8;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c370);
+                peg$fail(peg$c371);
             }
         }
         if (s1 !== peg$FAILED) {
@@ -74589,7 +75376,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseoverloadable_op();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c371(s3);
+                    s1 = peg$c372(s3);
                     s0 = s1;
                 }
                 else {
@@ -74610,25 +75397,25 @@ function peg$parse(input, options) {
     }
     function peg$parseoverloadable_op() {
         let s0;
-        if (input.substr(peg$currPos, 5) === peg$c372) {
-            s0 = peg$c372;
+        if (input.substr(peg$currPos, 5) === peg$c373) {
+            s0 = peg$c373;
             peg$currPos += 5;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c373);
+                peg$fail(peg$c374);
             }
         }
         if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 8) === peg$c374) {
-                s0 = peg$c374;
+            if (input.substr(peg$currPos, 8) === peg$c375) {
+                s0 = peg$c375;
                 peg$currPos += 8;
             }
             else {
                 s0 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c375);
+                    peg$fail(peg$c376);
                 }
             }
             if (s0 === peg$FAILED) {
@@ -74643,14 +75430,14 @@ function peg$parse(input, options) {
                     }
                 }
                 if (s0 === peg$FAILED) {
-                    if (input.substr(peg$currPos, 6) === peg$c320) {
-                        s0 = peg$c320;
+                    if (input.substr(peg$currPos, 6) === peg$c321) {
+                        s0 = peg$c321;
                         peg$currPos += 6;
                     }
                     else {
                         s0 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c321);
+                            peg$fail(peg$c322);
                         }
                     }
                     if (s0 === peg$FAILED) {
@@ -74885,36 +75672,36 @@ function peg$parse(input, options) {
                                                                                                             }
                                                                                                         }
                                                                                                         if (s0 === peg$FAILED) {
-                                                                                                            if (input.substr(peg$currPos, 2) === peg$c343) {
-                                                                                                                s0 = peg$c343;
+                                                                                                            if (input.substr(peg$currPos, 2) === peg$c344) {
+                                                                                                                s0 = peg$c344;
                                                                                                                 peg$currPos += 2;
                                                                                                             }
                                                                                                             else {
                                                                                                                 s0 = peg$FAILED;
                                                                                                                 if (peg$silentFails === 0) {
-                                                                                                                    peg$fail(peg$c344);
+                                                                                                                    peg$fail(peg$c345);
                                                                                                                 }
                                                                                                             }
                                                                                                             if (s0 === peg$FAILED) {
-                                                                                                                if (input.substr(peg$currPos, 2) === peg$c376) {
-                                                                                                                    s0 = peg$c376;
+                                                                                                                if (input.substr(peg$currPos, 2) === peg$c377) {
+                                                                                                                    s0 = peg$c377;
                                                                                                                     peg$currPos += 2;
                                                                                                                 }
                                                                                                                 else {
                                                                                                                     s0 = peg$FAILED;
                                                                                                                     if (peg$silentFails === 0) {
-                                                                                                                        peg$fail(peg$c377);
+                                                                                                                        peg$fail(peg$c378);
                                                                                                                     }
                                                                                                                 }
                                                                                                                 if (s0 === peg$FAILED) {
-                                                                                                                    if (input.substr(peg$currPos, 2) === peg$c378) {
-                                                                                                                        s0 = peg$c378;
+                                                                                                                    if (input.substr(peg$currPos, 2) === peg$c379) {
+                                                                                                                        s0 = peg$c379;
                                                                                                                         peg$currPos += 2;
                                                                                                                     }
                                                                                                                     else {
                                                                                                                         s0 = peg$FAILED;
                                                                                                                         if (peg$silentFails === 0) {
-                                                                                                                            peg$fail(peg$c379);
+                                                                                                                            peg$fail(peg$c380);
                                                                                                                         }
                                                                                                                     }
                                                                                                                     if (s0 === peg$FAILED) {
@@ -75117,13 +75904,13 @@ function peg$parse(input, options) {
     function peg$parseunoverloadable_op() {
         let s0;
         if (input.charCodeAt(peg$currPos) === 46) {
-            s0 = peg$c340;
+            s0 = peg$c341;
             peg$currPos++;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c341);
+                peg$fail(peg$c342);
             }
         }
         if (s0 === peg$FAILED) {
@@ -75138,25 +75925,25 @@ function peg$parse(input, options) {
                 }
             }
             if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 2) === peg$c364) {
-                    s0 = peg$c364;
+                if (input.substr(peg$currPos, 2) === peg$c365) {
+                    s0 = peg$c365;
                     peg$currPos += 2;
                 }
                 else {
                     s0 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c365);
+                        peg$fail(peg$c366);
                     }
                 }
                 if (s0 === peg$FAILED) {
-                    if (input.substr(peg$currPos, 2) === peg$c380) {
-                        s0 = peg$c380;
+                    if (input.substr(peg$currPos, 2) === peg$c381) {
+                        s0 = peg$c381;
                         peg$currPos += 2;
                     }
                     else {
                         s0 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c381);
+                            peg$fail(peg$c382);
                         }
                     }
                 }
@@ -75170,7 +75957,7 @@ function peg$parse(input, options) {
         s1 = peg$parseliteral_float();
         if (s1 !== peg$FAILED) {
             peg$savedPos = s0;
-            s1 = peg$c382(s1);
+            s1 = peg$c383(s1);
         }
         s0 = s1;
         if (s0 === peg$FAILED) {
@@ -75178,7 +75965,7 @@ function peg$parse(input, options) {
             s1 = peg$parseliteral_int();
             if (s1 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c383(s1);
+                s1 = peg$c384(s1);
             }
             s0 = s1;
             if (s0 === peg$FAILED) {
@@ -75186,7 +75973,7 @@ function peg$parse(input, options) {
                 s1 = peg$parseliteral_char();
                 if (s1 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c384(s1);
+                    s1 = peg$c385(s1);
                 }
                 s0 = s1;
                 if (s0 === peg$FAILED) {
@@ -75194,7 +75981,7 @@ function peg$parse(input, options) {
                     s1 = peg$parseliteral_string();
                     if (s1 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c385(s1);
+                        s1 = peg$c386(s1);
                     }
                     s0 = s1;
                     if (s0 === peg$FAILED) {
@@ -75202,7 +75989,7 @@ function peg$parse(input, options) {
                         s1 = peg$parseliteral_boolean();
                         if (s1 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c386(s1);
+                            s1 = peg$c387(s1);
                         }
                         s0 = s1;
                     }
@@ -75229,27 +76016,27 @@ function peg$parse(input, options) {
         }
         if (s1 !== peg$FAILED) {
             s2 = [];
-            if (peg$c387.test(input.charAt(peg$currPos))) {
+            if (peg$c388.test(input.charAt(peg$currPos))) {
                 s3 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s3 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c388);
+                    peg$fail(peg$c389);
                 }
             }
             if (s3 !== peg$FAILED) {
                 while (s3 !== peg$FAILED) {
                     s2.push(s3);
-                    if (peg$c387.test(input.charAt(peg$currPos))) {
+                    if (peg$c388.test(input.charAt(peg$currPos))) {
                         s3 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s3 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c388);
+                            peg$fail(peg$c389);
                         }
                     }
                 }
@@ -75259,7 +76046,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c389(s1, s2);
+                s1 = peg$c390(s1, s2);
                 s0 = s1;
             }
             else {
@@ -75291,27 +76078,27 @@ function peg$parse(input, options) {
         }
         if (s1 !== peg$FAILED) {
             s2 = [];
-            if (peg$c390.test(input.charAt(peg$currPos))) {
+            if (peg$c391.test(input.charAt(peg$currPos))) {
                 s3 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s3 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c391);
+                    peg$fail(peg$c392);
                 }
             }
             if (s3 !== peg$FAILED) {
                 while (s3 !== peg$FAILED) {
                     s2.push(s3);
-                    if (peg$c390.test(input.charAt(peg$currPos))) {
+                    if (peg$c391.test(input.charAt(peg$currPos))) {
                         s3 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s3 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c391);
+                            peg$fail(peg$c392);
                         }
                     }
                 }
@@ -75321,7 +76108,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = peg$currPos;
-                s3 = peg$c392(s1, s2);
+                s3 = peg$c393(s1, s2);
                 if (s3) {
                     s3 = undefined;
                 }
@@ -75330,7 +76117,7 @@ function peg$parse(input, options) {
                 }
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c393(s1, s2);
+                    s1 = peg$c394(s1, s2);
                     s0 = s1;
                 }
                 else {
@@ -75353,24 +76140,24 @@ function peg$parse(input, options) {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
         if (input.charCodeAt(peg$currPos) === 39) {
-            s1 = peg$c394;
+            s1 = peg$c395;
             peg$currPos++;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c395);
+                peg$fail(peg$c396);
             }
         }
         if (s1 !== peg$FAILED) {
-            if (peg$c396.test(input.charAt(peg$currPos))) {
+            if (peg$c397.test(input.charAt(peg$currPos))) {
                 s2 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s2 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c397);
+                    peg$fail(peg$c398);
                 }
             }
             if (s2 === peg$FAILED) {
@@ -75378,18 +76165,18 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 if (input.charCodeAt(peg$currPos) === 39) {
-                    s3 = peg$c394;
+                    s3 = peg$c395;
                     peg$currPos++;
                 }
                 else {
                     s3 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c395);
+                        peg$fail(peg$c396);
                     }
                 }
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c398(s2);
+                    s1 = peg$c399(s2);
                     s0 = s1;
                 }
                 else {
@@ -75412,25 +76199,25 @@ function peg$parse(input, options) {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
         if (input.charCodeAt(peg$currPos) === 34) {
-            s1 = peg$c399;
+            s1 = peg$c400;
             peg$currPos++;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c400);
+                peg$fail(peg$c401);
             }
         }
         if (s1 !== peg$FAILED) {
             s2 = [];
-            if (peg$c401.test(input.charAt(peg$currPos))) {
+            if (peg$c402.test(input.charAt(peg$currPos))) {
                 s3 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s3 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c402);
+                    peg$fail(peg$c403);
                 }
             }
             if (s3 === peg$FAILED) {
@@ -75438,14 +76225,14 @@ function peg$parse(input, options) {
             }
             while (s3 !== peg$FAILED) {
                 s2.push(s3);
-                if (peg$c401.test(input.charAt(peg$currPos))) {
+                if (peg$c402.test(input.charAt(peg$currPos))) {
                     s3 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s3 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c402);
+                        peg$fail(peg$c403);
                     }
                 }
                 if (s3 === peg$FAILED) {
@@ -75454,18 +76241,18 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 if (input.charCodeAt(peg$currPos) === 34) {
-                    s3 = peg$c399;
+                    s3 = peg$c400;
                     peg$currPos++;
                 }
                 else {
                     s3 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c400);
+                        peg$fail(peg$c401);
                     }
                 }
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c403(s2);
+                    s1 = peg$c404(s2);
                     s0 = s1;
                 }
                 else {
@@ -75487,14 +76274,14 @@ function peg$parse(input, options) {
     function peg$parseliteral_boolean() {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
-        if (input.substr(peg$currPos, 4) === peg$c404) {
-            s1 = peg$c404;
+        if (input.substr(peg$currPos, 4) === peg$c405) {
+            s1 = peg$c405;
             peg$currPos += 4;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c405);
+                peg$fail(peg$c406);
             }
         }
         if (s1 !== peg$FAILED) {
@@ -75511,7 +76298,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c406();
+                s1 = peg$c407();
                 s0 = s1;
             }
             else {
@@ -75525,14 +76312,14 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (input.substr(peg$currPos, 5) === peg$c407) {
-                s1 = peg$c407;
+            if (input.substr(peg$currPos, 5) === peg$c408) {
+                s1 = peg$c408;
                 peg$currPos += 5;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c408);
+                    peg$fail(peg$c409);
                 }
             }
             if (s1 !== peg$FAILED) {
@@ -75549,7 +76336,7 @@ function peg$parse(input, options) {
                 }
                 if (s2 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c409();
+                    s1 = peg$c410();
                     s0 = s1;
                 }
                 else {
@@ -75574,135 +76361,135 @@ function peg$parse(input, options) {
     }
     function peg$parsesimple_escape() {
         let s0;
-        if (input.substr(peg$currPos, 2) === peg$c410) {
-            s0 = peg$c410;
+        if (input.substr(peg$currPos, 2) === peg$c411) {
+            s0 = peg$c411;
             peg$currPos += 2;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c411);
+                peg$fail(peg$c412);
             }
         }
         if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 2) === peg$c412) {
-                s0 = peg$c412;
+            if (input.substr(peg$currPos, 2) === peg$c413) {
+                s0 = peg$c413;
                 peg$currPos += 2;
             }
             else {
                 s0 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c413);
+                    peg$fail(peg$c414);
                 }
             }
             if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 2) === peg$c414) {
-                    s0 = peg$c414;
+                if (input.substr(peg$currPos, 2) === peg$c415) {
+                    s0 = peg$c415;
                     peg$currPos += 2;
                 }
                 else {
                     s0 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c415);
+                        peg$fail(peg$c416);
                     }
                 }
                 if (s0 === peg$FAILED) {
-                    if (input.substr(peg$currPos, 2) === peg$c416) {
-                        s0 = peg$c416;
+                    if (input.substr(peg$currPos, 2) === peg$c417) {
+                        s0 = peg$c417;
                         peg$currPos += 2;
                     }
                     else {
                         s0 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c417);
+                            peg$fail(peg$c418);
                         }
                     }
                     if (s0 === peg$FAILED) {
-                        if (input.substr(peg$currPos, 2) === peg$c418) {
-                            s0 = peg$c418;
+                        if (input.substr(peg$currPos, 2) === peg$c419) {
+                            s0 = peg$c419;
                             peg$currPos += 2;
                         }
                         else {
                             s0 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c419);
+                                peg$fail(peg$c420);
                             }
                         }
                         if (s0 === peg$FAILED) {
-                            if (input.substr(peg$currPos, 2) === peg$c420) {
-                                s0 = peg$c420;
+                            if (input.substr(peg$currPos, 2) === peg$c421) {
+                                s0 = peg$c421;
                                 peg$currPos += 2;
                             }
                             else {
                                 s0 = peg$FAILED;
                                 if (peg$silentFails === 0) {
-                                    peg$fail(peg$c421);
+                                    peg$fail(peg$c422);
                                 }
                             }
                             if (s0 === peg$FAILED) {
-                                if (input.substr(peg$currPos, 2) === peg$c422) {
-                                    s0 = peg$c422;
+                                if (input.substr(peg$currPos, 2) === peg$c423) {
+                                    s0 = peg$c423;
                                     peg$currPos += 2;
                                 }
                                 else {
                                     s0 = peg$FAILED;
                                     if (peg$silentFails === 0) {
-                                        peg$fail(peg$c423);
+                                        peg$fail(peg$c424);
                                     }
                                 }
                                 if (s0 === peg$FAILED) {
-                                    if (input.substr(peg$currPos, 2) === peg$c424) {
-                                        s0 = peg$c424;
+                                    if (input.substr(peg$currPos, 2) === peg$c425) {
+                                        s0 = peg$c425;
                                         peg$currPos += 2;
                                     }
                                     else {
                                         s0 = peg$FAILED;
                                         if (peg$silentFails === 0) {
-                                            peg$fail(peg$c425);
+                                            peg$fail(peg$c426);
                                         }
                                     }
                                     if (s0 === peg$FAILED) {
-                                        if (input.substr(peg$currPos, 2) === peg$c426) {
-                                            s0 = peg$c426;
+                                        if (input.substr(peg$currPos, 2) === peg$c427) {
+                                            s0 = peg$c427;
                                             peg$currPos += 2;
                                         }
                                         else {
                                             s0 = peg$FAILED;
                                             if (peg$silentFails === 0) {
-                                                peg$fail(peg$c427);
+                                                peg$fail(peg$c428);
                                             }
                                         }
                                         if (s0 === peg$FAILED) {
-                                            if (input.substr(peg$currPos, 2) === peg$c428) {
-                                                s0 = peg$c428;
+                                            if (input.substr(peg$currPos, 2) === peg$c429) {
+                                                s0 = peg$c429;
                                                 peg$currPos += 2;
                                             }
                                             else {
                                                 s0 = peg$FAILED;
                                                 if (peg$silentFails === 0) {
-                                                    peg$fail(peg$c429);
+                                                    peg$fail(peg$c430);
                                                 }
                                             }
                                             if (s0 === peg$FAILED) {
-                                                if (input.substr(peg$currPos, 2) === peg$c430) {
-                                                    s0 = peg$c430;
+                                                if (input.substr(peg$currPos, 2) === peg$c431) {
+                                                    s0 = peg$c431;
                                                     peg$currPos += 2;
                                                 }
                                                 else {
                                                     s0 = peg$FAILED;
                                                     if (peg$silentFails === 0) {
-                                                        peg$fail(peg$c431);
+                                                        peg$fail(peg$c432);
                                                     }
                                                 }
                                                 if (s0 === peg$FAILED) {
-                                                    if (input.substr(peg$currPos, 2) === peg$c432) {
-                                                        s0 = peg$c432;
+                                                    if (input.substr(peg$currPos, 2) === peg$c433) {
+                                                        s0 = peg$c433;
                                                         peg$currPos += 2;
                                                     }
                                                     else {
                                                         s0 = peg$FAILED;
                                                         if (peg$silentFails === 0) {
-                                                            peg$fail(peg$c433);
+                                                            peg$fail(peg$c434);
                                                         }
                                                     }
                                                 }
@@ -75720,37 +76507,37 @@ function peg$parse(input, options) {
     }
     function peg$parseoctal_escape() {
         let s0, s1, s2, s3;
-        if (peg$c434.test(input.charAt(peg$currPos))) {
+        if (peg$c435.test(input.charAt(peg$currPos))) {
             s0 = input.charAt(peg$currPos);
             peg$currPos++;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c435);
+                peg$fail(peg$c436);
             }
         }
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
-            if (peg$c434.test(input.charAt(peg$currPos))) {
+            if (peg$c435.test(input.charAt(peg$currPos))) {
                 s1 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c435);
+                    peg$fail(peg$c436);
                 }
             }
             if (s1 !== peg$FAILED) {
-                if (peg$c434.test(input.charAt(peg$currPos))) {
+                if (peg$c435.test(input.charAt(peg$currPos))) {
                     s2 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s2 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c435);
+                        peg$fail(peg$c436);
                     }
                 }
                 if (s2 !== peg$FAILED) {
@@ -75768,36 +76555,36 @@ function peg$parse(input, options) {
             }
             if (s0 === peg$FAILED) {
                 s0 = peg$currPos;
-                if (peg$c434.test(input.charAt(peg$currPos))) {
+                if (peg$c435.test(input.charAt(peg$currPos))) {
                     s1 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c435);
+                        peg$fail(peg$c436);
                     }
                 }
                 if (s1 !== peg$FAILED) {
-                    if (peg$c434.test(input.charAt(peg$currPos))) {
+                    if (peg$c435.test(input.charAt(peg$currPos))) {
                         s2 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s2 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c435);
+                            peg$fail(peg$c436);
                         }
                     }
                     if (s2 !== peg$FAILED) {
-                        if (peg$c434.test(input.charAt(peg$currPos))) {
+                        if (peg$c435.test(input.charAt(peg$currPos))) {
                             s3 = input.charAt(peg$currPos);
                             peg$currPos++;
                         }
                         else {
                             s3 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c435);
+                                peg$fail(peg$c436);
                             }
                         }
                         if (s3 !== peg$FAILED) {
@@ -75836,7 +76623,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c437(s1, s2);
+                s1 = peg$c438(s1, s2);
                 s0 = s1;
             }
             else {
@@ -75852,35 +76639,35 @@ function peg$parse(input, options) {
         if (s0 === peg$FAILED) {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c436);
+                peg$fail(peg$c437);
             }
         }
         return s0;
     }
     function peg$parseidentifierChar() {
         let s0;
-        if (peg$c438.test(input.charAt(peg$currPos))) {
+        if (peg$c439.test(input.charAt(peg$currPos))) {
             s0 = input.charAt(peg$currPos);
             peg$currPos++;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c439);
+                peg$fail(peg$c440);
             }
         }
         return s0;
     }
     function peg$parseidentifierFirstChar() {
         let s0;
-        if (peg$c440.test(input.charAt(peg$currPos))) {
+        if (peg$c441.test(input.charAt(peg$currPos))) {
             s0 = input.charAt(peg$currPos);
             peg$currPos++;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c441);
+                peg$fail(peg$c442);
             }
         }
         return s0;
@@ -75915,7 +76702,7 @@ function peg$parse(input, options) {
                     }
                     if (s4 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c442(s1, s3);
+                        s1 = peg$c443(s1, s3);
                         s0 = s1;
                     }
                     else {
@@ -75943,36 +76730,36 @@ function peg$parse(input, options) {
         let s0, s1, s2, s3;
         s0 = peg$currPos;
         if (input.charCodeAt(peg$currPos) === 64) {
-            s1 = peg$c443;
+            s1 = peg$c444;
             peg$currPos++;
         }
         else {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c444);
+                peg$fail(peg$c445);
             }
         }
         if (s1 !== peg$FAILED) {
             s2 = [];
-            if (peg$c445.test(input.charAt(peg$currPos))) {
+            if (peg$c446.test(input.charAt(peg$currPos))) {
                 s3 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s3 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c446);
+                    peg$fail(peg$c447);
                 }
             }
             if (s3 === peg$FAILED) {
-                if (input.substr(peg$currPos, 2) === peg$c364) {
-                    s3 = peg$c364;
+                if (input.substr(peg$currPos, 2) === peg$c365) {
+                    s3 = peg$c365;
                     peg$currPos += 2;
                 }
                 else {
                     s3 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c365);
+                        peg$fail(peg$c366);
                     }
                 }
                 if (s3 === peg$FAILED) {
@@ -75982,25 +76769,25 @@ function peg$parse(input, options) {
             if (s3 !== peg$FAILED) {
                 while (s3 !== peg$FAILED) {
                     s2.push(s3);
-                    if (peg$c445.test(input.charAt(peg$currPos))) {
+                    if (peg$c446.test(input.charAt(peg$currPos))) {
                         s3 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s3 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c446);
+                            peg$fail(peg$c447);
                         }
                     }
                     if (s3 === peg$FAILED) {
-                        if (input.substr(peg$currPos, 2) === peg$c364) {
-                            s3 = peg$c364;
+                        if (input.substr(peg$currPos, 2) === peg$c365) {
+                            s3 = peg$c365;
                             peg$currPos += 2;
                         }
                         else {
                             s3 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c365);
+                                peg$fail(peg$c366);
                             }
                         }
                         if (s3 === peg$FAILED) {
@@ -76014,7 +76801,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c447(s2);
+                s1 = peg$c448(s2);
                 s0 = s1;
             }
             else {
@@ -76033,26 +76820,26 @@ function peg$parse(input, options) {
         peg$silentFails++;
         s0 = peg$currPos;
         s1 = [];
-        if (peg$c449.test(input.charAt(peg$currPos))) {
+        if (peg$c450.test(input.charAt(peg$currPos))) {
             s2 = input.charAt(peg$currPos);
             peg$currPos++;
         }
         else {
             s2 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c450);
+                peg$fail(peg$c451);
             }
         }
         while (s2 !== peg$FAILED) {
             s1.push(s2);
-            if (peg$c449.test(input.charAt(peg$currPos))) {
+            if (peg$c450.test(input.charAt(peg$currPos))) {
                 s2 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s2 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c450);
+                    peg$fail(peg$c451);
                 }
             }
         }
@@ -76080,26 +76867,26 @@ function peg$parse(input, options) {
         }
         if (s0 === peg$FAILED) {
             s0 = [];
-            if (peg$c449.test(input.charAt(peg$currPos))) {
+            if (peg$c450.test(input.charAt(peg$currPos))) {
                 s1 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s1 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c450);
+                    peg$fail(peg$c451);
                 }
             }
             while (s1 !== peg$FAILED) {
                 s0.push(s1);
-                if (peg$c449.test(input.charAt(peg$currPos))) {
+                if (peg$c450.test(input.charAt(peg$currPos))) {
                     s1 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c450);
+                        peg$fail(peg$c451);
                     }
                 }
             }
@@ -76108,7 +76895,7 @@ function peg$parse(input, options) {
         if (s0 === peg$FAILED) {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c448);
+                peg$fail(peg$c449);
             }
         }
         return s0;
@@ -76136,27 +76923,27 @@ function peg$parse(input, options) {
         if (s0 === peg$FAILED) {
             s0 = peg$currPos;
             s1 = [];
-            if (peg$c449.test(input.charAt(peg$currPos))) {
+            if (peg$c450.test(input.charAt(peg$currPos))) {
                 s2 = input.charAt(peg$currPos);
                 peg$currPos++;
             }
             else {
                 s2 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c450);
+                    peg$fail(peg$c451);
                 }
             }
             if (s2 !== peg$FAILED) {
                 while (s2 !== peg$FAILED) {
                     s1.push(s2);
-                    if (peg$c449.test(input.charAt(peg$currPos))) {
+                    if (peg$c450.test(input.charAt(peg$currPos))) {
                         s2 = input.charAt(peg$currPos);
                         peg$currPos++;
                     }
                     else {
                         s2 = peg$FAILED;
                         if (peg$silentFails === 0) {
-                            peg$fail(peg$c450);
+                            peg$fail(peg$c451);
                         }
                     }
                 }
@@ -76188,27 +76975,27 @@ function peg$parse(input, options) {
             }
             if (s0 === peg$FAILED) {
                 s0 = [];
-                if (peg$c449.test(input.charAt(peg$currPos))) {
+                if (peg$c450.test(input.charAt(peg$currPos))) {
                     s1 = input.charAt(peg$currPos);
                     peg$currPos++;
                 }
                 else {
                     s1 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c450);
+                        peg$fail(peg$c451);
                     }
                 }
                 if (s1 !== peg$FAILED) {
                     while (s1 !== peg$FAILED) {
                         s0.push(s1);
-                        if (peg$c449.test(input.charAt(peg$currPos))) {
+                        if (peg$c450.test(input.charAt(peg$currPos))) {
                             s1 = input.charAt(peg$currPos);
                             peg$currPos++;
                         }
                         else {
                             s1 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c450);
+                                peg$fail(peg$c451);
                             }
                         }
                     }
@@ -76222,7 +77009,7 @@ function peg$parse(input, options) {
         if (s0 === peg$FAILED) {
             s1 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c451);
+                peg$fail(peg$c452);
             }
         }
         return s0;
@@ -76233,7 +77020,7 @@ function peg$parse(input, options) {
         s1 = peg$parsetemplate_identifier();
         if (s1 !== peg$FAILED) {
             peg$savedPos = peg$currPos;
-            s2 = peg$c452(s1);
+            s2 = peg$c453(s1);
             if (s2) {
                 s2 = undefined;
             }
@@ -76242,7 +77029,7 @@ function peg$parse(input, options) {
             }
             if (s2 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c366(s1);
+                s1 = peg$c367(s1);
                 s0 = s1;
             }
             else {
@@ -76259,7 +77046,7 @@ function peg$parse(input, options) {
             s1 = peg$parseidentifier();
             if (s1 !== peg$FAILED) {
                 peg$savedPos = peg$currPos;
-                s2 = peg$c452(s1);
+                s2 = peg$c453(s1);
                 if (s2) {
                     s2 = undefined;
                 }
@@ -76268,7 +77055,7 @@ function peg$parse(input, options) {
                 }
                 if (s2 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c366(s1);
+                    s1 = peg$c367(s1);
                     s0 = s1;
                 }
                 else {
@@ -76289,7 +77076,7 @@ function peg$parse(input, options) {
         s1 = peg$parseclass_head();
         if (s1 !== peg$FAILED) {
             peg$savedPos = peg$currPos;
-            s2 = peg$c453(s1);
+            s2 = peg$c454(s1);
             if (s2) {
                 s2 = undefined;
             }
@@ -76333,7 +77120,7 @@ function peg$parse(input, options) {
                                     }
                                     if (s8 !== peg$FAILED) {
                                         peg$savedPos = s0;
-                                        s1 = peg$c454(s1, s6);
+                                        s1 = peg$c455(s1, s6);
                                         s0 = s1;
                                     }
                                     else {
@@ -76380,7 +77167,7 @@ function peg$parse(input, options) {
             s1 = peg$parseclass_head();
             if (s1 !== peg$FAILED) {
                 peg$savedPos = peg$currPos;
-                s2 = peg$c455(s1);
+                s2 = peg$c456(s1);
                 if (s2) {
                     s2 = undefined;
                 }
@@ -76418,7 +77205,7 @@ function peg$parse(input, options) {
                         s6 = peg$parsebase_clause();
                         if (s6 !== peg$FAILED) {
                             peg$savedPos = s4;
-                            s5 = peg$c456(s1, s3, s6);
+                            s5 = peg$c457(s1, s3, s6);
                             s4 = s5;
                         }
                         else {
@@ -76435,7 +77222,7 @@ function peg$parse(input, options) {
                     }
                     if (s4 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c457(s1, s3, s4);
+                        s1 = peg$c458(s1, s3, s4);
                         s0 = s1;
                     }
                     else {
@@ -76469,36 +77256,36 @@ function peg$parse(input, options) {
     }
     function peg$parseclass_key() {
         let s0;
-        if (input.substr(peg$currPos, 5) === peg$c458) {
-            s0 = peg$c458;
+        if (input.substr(peg$currPos, 5) === peg$c459) {
+            s0 = peg$c459;
             peg$currPos += 5;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c459);
+                peg$fail(peg$c460);
             }
         }
         if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 6) === peg$c460) {
-                s0 = peg$c460;
+            if (input.substr(peg$currPos, 6) === peg$c461) {
+                s0 = peg$c461;
                 peg$currPos += 6;
             }
             else {
                 s0 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c461);
+                    peg$fail(peg$c462);
                 }
             }
             if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 5) === peg$c462) {
-                    s0 = peg$c462;
+                if (input.substr(peg$currPos, 5) === peg$c463) {
+                    s0 = peg$c463;
                     peg$currPos += 5;
                 }
                 else {
                     s0 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c463);
+                        peg$fail(peg$c464);
                     }
                 }
             }
@@ -76532,7 +77319,7 @@ function peg$parse(input, options) {
                             s8 = peg$parsews();
                             if (s8 !== peg$FAILED) {
                                 peg$savedPos = s6;
-                                s7 = peg$c464(s1, s7);
+                                s7 = peg$c465(s1, s7);
                                 s6 = s7;
                             }
                             else {
@@ -76552,7 +77339,7 @@ function peg$parse(input, options) {
                                 s8 = peg$parsews();
                                 if (s8 !== peg$FAILED) {
                                     peg$savedPos = s6;
-                                    s7 = peg$c464(s1, s7);
+                                    s7 = peg$c465(s1, s7);
                                     s6 = s7;
                                 }
                                 else {
@@ -76567,7 +77354,7 @@ function peg$parse(input, options) {
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c465(s1, s5);
+                            s1 = peg$c466(s1, s5);
                             s0 = s1;
                         }
                         else {
@@ -76603,7 +77390,7 @@ function peg$parse(input, options) {
                 s4 = peg$parsews();
                 if (s4 !== peg$FAILED) {
                     peg$savedPos = s2;
-                    s3 = peg$c466(s3);
+                    s3 = peg$c467(s3);
                     s2 = s3;
                 }
                 else {
@@ -76624,7 +77411,7 @@ function peg$parse(input, options) {
                         s4 = peg$parsews();
                         if (s4 !== peg$FAILED) {
                             peg$savedPos = s2;
-                            s3 = peg$c466(s3);
+                            s3 = peg$c467(s3);
                             s2 = s3;
                         }
                         else {
@@ -76643,7 +77430,7 @@ function peg$parse(input, options) {
             }
             if (s1 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s1 = peg$c467(s1);
+                s1 = peg$c468(s1);
             }
             s0 = s1;
         }
@@ -76651,36 +77438,36 @@ function peg$parse(input, options) {
     }
     function peg$parseaccess_specifier() {
         let s0;
-        if (input.substr(peg$currPos, 7) === peg$c468) {
-            s0 = peg$c468;
+        if (input.substr(peg$currPos, 7) === peg$c469) {
+            s0 = peg$c469;
             peg$currPos += 7;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c469);
+                peg$fail(peg$c470);
             }
         }
         if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 9) === peg$c470) {
-                s0 = peg$c470;
+            if (input.substr(peg$currPos, 9) === peg$c471) {
+                s0 = peg$c471;
                 peg$currPos += 9;
             }
             else {
                 s0 = peg$FAILED;
                 if (peg$silentFails === 0) {
-                    peg$fail(peg$c471);
+                    peg$fail(peg$c472);
                 }
             }
             if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 6) === peg$c472) {
-                    s0 = peg$c472;
+                if (input.substr(peg$currPos, 6) === peg$c473) {
+                    s0 = peg$c473;
                     peg$currPos += 6;
                 }
                 else {
                     s0 = peg$FAILED;
                     if (peg$silentFails === 0) {
-                        peg$fail(peg$c473);
+                        peg$fail(peg$c474);
                     }
                 }
             }
@@ -76722,7 +77509,7 @@ function peg$parse(input, options) {
                             }
                             if (s6 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c474(s1, s4);
+                                s1 = peg$c475(s1, s4);
                                 s0 = s1;
                             }
                             else {
@@ -76774,7 +77561,7 @@ function peg$parse(input, options) {
                         }
                         if (s4 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c475(s2);
+                            s1 = peg$c476(s2);
                             s0 = s1;
                         }
                         else {
@@ -76839,7 +77626,7 @@ function peg$parse(input, options) {
                                         }
                                         if (s7 !== peg$FAILED) {
                                             peg$savedPos = s0;
-                                            s1 = peg$c474(s1, s5);
+                                            s1 = peg$c475(s1, s5);
                                             s0 = s1;
                                         }
                                         else {
@@ -76897,7 +77684,7 @@ function peg$parse(input, options) {
                             }
                             if (s3 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c476(s1);
+                                s1 = peg$c477(s1);
                                 s0 = s1;
                             }
                             else {
@@ -77047,18 +77834,18 @@ function peg$parse(input, options) {
                     s4 = peg$parsews();
                     if (s4 !== peg$FAILED) {
                         if (input.charCodeAt(peg$currPos) === 48) {
-                            s5 = peg$c477;
+                            s5 = peg$c478;
                             peg$currPos++;
                         }
                         else {
                             s5 = peg$FAILED;
                             if (peg$silentFails === 0) {
-                                peg$fail(peg$c478);
+                                peg$fail(peg$c479);
                             }
                         }
                         if (s5 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c479(s1);
+                            s1 = peg$c480(s1);
                             s0 = s1;
                         }
                         else {
@@ -77116,7 +77903,7 @@ function peg$parse(input, options) {
                             }
                             if (s5 !== peg$FAILED) {
                                 peg$savedPos = s0;
-                                s1 = peg$c480(s1);
+                                s1 = peg$c481(s1);
                                 s0 = s1;
                             }
                             else {
@@ -77152,7 +77939,7 @@ function peg$parse(input, options) {
                         s3 = peg$parsebrace_or_equal_initializer();
                         if (s3 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c481(s1, s3);
+                            s1 = peg$c482(s1, s3);
                             s0 = s1;
                         }
                         else {
@@ -77181,7 +77968,7 @@ function peg$parse(input, options) {
                                 s5 = peg$parsews();
                                 if (s5 !== peg$FAILED) {
                                     peg$savedPos = s3;
-                                    s4 = peg$c482(s1, s4);
+                                    s4 = peg$c483(s1, s4);
                                     s3 = s4;
                                 }
                                 else {
@@ -77197,7 +77984,7 @@ function peg$parse(input, options) {
                                 s4 = peg$parsebrace_or_equal_initializer();
                                 if (s4 !== peg$FAILED) {
                                     peg$savedPos = s0;
-                                    s1 = peg$c483(s1, s3, s4);
+                                    s1 = peg$c484(s1, s3, s4);
                                     s0 = s1;
                                 }
                                 else {
@@ -77228,7 +78015,7 @@ function peg$parse(input, options) {
                                 s3 = peg$parsevirt_specifier();
                                 if (s3 !== peg$FAILED) {
                                     peg$savedPos = s0;
-                                    s1 = peg$c484(s1, s3);
+                                    s1 = peg$c485(s1, s3);
                                     s0 = s1;
                                 }
                                 else {
@@ -77256,14 +78043,14 @@ function peg$parse(input, options) {
     }
     function peg$parsevirt_specifier() {
         let s0;
-        if (input.substr(peg$currPos, 8) === peg$c485) {
-            s0 = peg$c485;
+        if (input.substr(peg$currPos, 8) === peg$c486) {
+            s0 = peg$c486;
             peg$currPos += 8;
         }
         else {
             s0 = peg$FAILED;
             if (peg$silentFails === 0) {
-                peg$fail(peg$c486);
+                peg$fail(peg$c487);
             }
         }
         return s0;
@@ -77287,7 +78074,7 @@ function peg$parse(input, options) {
                 s3 = peg$parsebase_specifier_list();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c487(s3);
+                    s1 = peg$c488(s3);
                     s0 = s1;
                 }
                 else {
@@ -77331,7 +78118,7 @@ function peg$parse(input, options) {
                         s7 = peg$parsebase_specifier();
                         if (s7 !== peg$FAILED) {
                             peg$savedPos = s3;
-                            s4 = peg$c488(s1, s7);
+                            s4 = peg$c489(s1, s7);
                             s3 = s4;
                         }
                         else {
@@ -77374,7 +78161,7 @@ function peg$parse(input, options) {
                             s7 = peg$parsebase_specifier();
                             if (s7 !== peg$FAILED) {
                                 peg$savedPos = s3;
-                                s4 = peg$c488(s1, s7);
+                                s4 = peg$c489(s1, s7);
                                 s3 = s4;
                             }
                             else {
@@ -77435,7 +78222,7 @@ function peg$parse(input, options) {
                     s5 = peg$parseWS();
                     if (s5 !== peg$FAILED) {
                         peg$savedPos = s3;
-                        s4 = peg$c489(s4);
+                        s4 = peg$c490(s4);
                         s3 = s4;
                     }
                     else {
@@ -77451,7 +78238,7 @@ function peg$parse(input, options) {
                     s4 = peg$parsequalified_class_name();
                     if (s4 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c490(s3, s4);
+                        s1 = peg$c491(s3, s4);
                         s0 = s1;
                     }
                     else {
@@ -77481,7 +78268,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseWS();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s1;
-                    s2 = peg$c489(s2);
+                    s2 = peg$c490(s2);
                     s1 = s2;
                 }
                 else {
@@ -77510,7 +78297,7 @@ function peg$parse(input, options) {
                         s4 = peg$parsequalified_class_name();
                         if (s4 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c490(s1, s4);
+                            s1 = peg$c491(s1, s4);
                             s0 = s1;
                         }
                         else {
@@ -77541,7 +78328,7 @@ function peg$parse(input, options) {
                         s3 = peg$parsequalified_class_name();
                         if (s3 !== peg$FAILED) {
                             peg$savedPos = s0;
-                            s1 = peg$c491(s1, s3);
+                            s1 = peg$c492(s1, s3);
                             s0 = s1;
                         }
                         else {
@@ -77563,7 +78350,7 @@ function peg$parse(input, options) {
                     s1 = peg$parsequalified_class_name();
                     if (s1 !== peg$FAILED) {
                         peg$savedPos = s0;
-                        s1 = peg$c492(s1);
+                        s1 = peg$c493(s1);
                     }
                     s0 = s1;
                 }
@@ -77581,7 +78368,7 @@ function peg$parse(input, options) {
                 s3 = peg$parseclass_name();
                 if (s3 !== peg$FAILED) {
                     peg$savedPos = s0;
-                    s1 = peg$c493(s1, s3);
+                    s1 = peg$c494(s1, s3);
                     s0 = s1;
                 }
                 else {
@@ -77601,6 +78388,26 @@ function peg$parse(input, options) {
         if (s0 === peg$FAILED) {
             s0 = peg$parseclass_name();
         }
+        return s0;
+    }
+    function peg$parseanything() {
+        let s0, s1;
+        s0 = peg$currPos;
+        if (input.substr(peg$currPos, 10) === peg$c495) {
+            s1 = peg$c495;
+            peg$currPos += 10;
+        }
+        else {
+            s1 = peg$FAILED;
+            if (peg$silentFails === 0) {
+                peg$fail(peg$c496);
+            }
+        }
+        if (s1 !== peg$FAILED) {
+            peg$savedPos = s0;
+            s1 = peg$c497();
+        }
+        s0 = s1;
         return s0;
     }
     const KEYWORDS = new Set([
@@ -78079,6 +78886,22 @@ class CPPRandom {
     }
 }
 exports.CPPRandom = CPPRandom;
+
+
+/***/ }),
+
+/***/ 5348:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.setCPP_ANIMATIONS = exports.CPP_ANIMATIONS = void 0;
+exports.CPP_ANIMATIONS = true;
+function setCPP_ANIMATIONS(onOff) {
+    exports.CPP_ANIMATIONS = onOff;
+}
+exports.setCPP_ANIMATIONS = setCPP_ANIMATIONS;
 
 
 /***/ }),
@@ -80242,6 +81065,10 @@ class ProjectEditor {
     //     // Set first file to be active
     //     this.recompile();
     // }
+    onFileContentsSet(file) {
+        let fileEd = this.fileEditorsMap[file.name];
+        fileEd === null || fileEd === void 0 ? void 0 : fileEd.setContents(file.text);
+    }
     onFileAdded(file) {
         // Create a FileEditor object to manage editing the file
         let fileEd = new FileEditor(file);
@@ -80345,6 +81172,9 @@ class ProjectEditor {
     }
 }
 ProjectEditor.instances = [];
+__decorate([
+    observe_1.messageResponse("fileContentsSet", "unwrap")
+], ProjectEditor.prototype, "onFileContentsSet", null);
 __decorate([
     observe_1.messageResponse("fileAdded", "unwrap")
 ], ProjectEditor.prototype, "onFileAdded", null);
@@ -80584,10 +81414,16 @@ class FileEditor {
         this.observable = new observe_1.Observable(this);
         // private readonly annotations: Annotation[] = [];
         this.gutterErrors = [];
+        this.ignoreContentsSet = false;
         this.file = file;
         this.doc = codemirror_1.default.Doc(file.text, CODEMIRROR_MODE);
         codemirror_1.default.on(this.doc, "change", () => { this.onEdit(); });
         // FileEditor.instances.push(this);
+    }
+    setContents(contents) {
+        if (!this.ignoreContentsSet) {
+            this.doc.setValue(contents);
+        }
     }
     // public setFile() {
     // }
@@ -80606,7 +81442,9 @@ class FileEditor {
         $(".cm-type").filter(function () {
             return $(this).html().trim() === "*";
         }).removeClass("cm-type").addClass("cm-operator");
+        this.ignoreContentsSet = true;
         this.observable.send("textChanged", this.file);
+        this.ignoreContentsSet = false;
         // if(this.i_onEditTimeout){
         //     clearTimeout(this.i_onEditTimeout);
         // }
@@ -80747,16 +81585,7 @@ function createRunestoneExerciseOutlet(id) {
                         <div class="codeMirrorEditor" style = "flex-grow: 1; position: relative; overflow-y: hidden; height: 100%; background-color: #272822"></div>
                         <div class="lobster-instant-memory-diagram" style="display: none; height: 100%; flex: 0 1 300px;"></div>
                     </div>
-                    <div class="annotationMessagesContainer" style="position: absolute; bottom: 0; left: 0px; right: 0px; overflow: hidden; text-align: center; pointer-events: none">
-                        <div class="annotationMessages">
-                            <div style="height: 100px; margin-left: 5px; float: right;">
-                                <img src="img/lobster_teaching.jpg" class="lobsterRecursionImage" style="height: 90px; margin-left: 5px;"/>
-                                <img src="img/lobster_recursion.jpg" class="lobsterTeachingImage" style="display:none; height: 90px; margin-left: 5px;"/>
-                                <div style="padding-right: 5px; text-align: center"><button>Thanks!</button></div>
-                            </div>
-                            <div style="height: 100%; overflow-y: auto"><table style="height: 110px; margin-left: auto; margin-right: auto"><tr><td><div class="annotation-message"></div></td></tr></table></div>
-                        </div>
-                    </div>
+                    
                 </div>
             </div>
             <div id="lobster-ex-${id}-sim-pane" class="lobster-sim-pane tab-pane fade" style="height: 100%">
@@ -80769,7 +81598,6 @@ function createRunestoneExerciseOutlet(id) {
                         <div class="alerts">
                             <div style="display:inline-block; padding: 5px">
                                 <div style="height: 100px; margin-left: 5px; float: right;">
-                                    <img src="img/lobster.png" style="height: 80px; margin-left: 5px;"/>
                                     <div style="padding-right: 5px; text-align: right"><button>Dismiss</button></div>
                                 </div>
                                 <table style="height: 110px"><tr><td><div class="alerts-message"></div></td></tr></table>
@@ -80874,7 +81702,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.IstreamBufferOutlet = exports.CodeStackOutlet = exports.RunningCodeOutlet = exports.TemporaryObjectsOutlet = exports.HeapOutlet = exports.StackFramesOutlet = exports.StackFrameOutlet = exports.createMemoryObjectOutlet = exports.VectorMemoryObject = exports.InlinePointedArrayOutlet = exports.StringMemoryObject = exports.ClassMemoryObjectOutlet = exports.ArrayElemMemoryObjectOutlet = exports.ArrayMemoryObjectOutlet = exports.ReferenceMemoryOutlet = exports.PointerMemoryObjectOutlet = exports.SingleMemoryObject = exports.MemoryObjectOutlet = exports.MemoryOutlet = exports.DefaultLobsterOutlet = exports.SimulationOutlet = exports.setCPP_ANIMATIONS = exports.CPP_ANIMATIONS = void 0;
+exports.IstreamBufferOutlet = exports.CodeStackOutlet = exports.RunningCodeOutlet = exports.TemporaryObjectsOutlet = exports.HeapOutlet = exports.StackFramesOutlet = exports.StackFrameOutlet = exports.createMemoryObjectOutlet = exports.VectorMemoryObject = exports.InlinePointedArrayOutlet = exports.StringMemoryObject = exports.ClassMemoryObjectOutlet = exports.ArrayElemMemoryObjectOutlet = exports.ArrayMemoryObjectOutlet = exports.ReferenceMemoryOutlet = exports.PointerMemoryObjectOutlet = exports.SingleMemoryObject = exports.MemoryObjectOutlet = exports.MemoryOutlet = exports.DefaultLobsterOutlet = exports.SimulationOutlet = void 0;
 const observe_1 = __webpack_require__(5114);
 const SVG = __importStar(__webpack_require__(5500));
 const objects_1 = __webpack_require__(697);
@@ -80886,14 +81714,10 @@ const simulationRunners_1 = __webpack_require__(9108);
 const entities_1 = __webpack_require__(8397);
 const codeOutlets_1 = __webpack_require__(3004);
 const functions_1 = __webpack_require__(2367);
+const CPP_ANIMATIONS_1 = __webpack_require__(5348);
 const FADE_DURATION = 300;
 const SLIDE_DURATION = 400;
 const VALUE_TRANSFER_DURATION = 500;
-exports.CPP_ANIMATIONS = true;
-function setCPP_ANIMATIONS(onOff) {
-    exports.CPP_ANIMATIONS = onOff;
-}
-exports.setCPP_ANIMATIONS = setCPP_ANIMATIONS;
 function findExactlyOne(element, selector) {
     let found = element.find(selector);
     util_1.assert(found.length === 1, `Within the SimulationOutlet's element, there must be contained EXACTLY ONE element with the selector "${selector}".`);
@@ -82125,7 +82949,7 @@ class StackFramesOutlet {
         if (frame.func.model.context.isLibrary) {
             // leave display as none
         }
-        else if (exports.CPP_ANIMATIONS) {
+        else if (CPP_ANIMATIONS_1.CPP_ANIMATIONS) {
             (this.frameElems.length == 1 ? frameElem.fadeIn(FADE_DURATION) : frameElem.slideDown(SLIDE_DURATION));
         }
         else {
@@ -82136,7 +82960,7 @@ class StackFramesOutlet {
         this.pushFrame(msg.data);
     }
     popFrame() {
-        if (exports.CPP_ANIMATIONS) {
+        if (CPP_ANIMATIONS_1.CPP_ANIMATIONS) {
             let popped = this.frameElems.pop();
             popped.slideUp(SLIDE_DURATION, function () {
                 $(this).remove();
@@ -82186,7 +83010,7 @@ class HeapOutlet {
         createMemoryObjectOutlet(elem, obj, this.memoryOutlet);
         this.objectElems[obj.address] = elem;
         this.objectsElem.prepend(elem);
-        if (exports.CPP_ANIMATIONS) {
+        if (CPP_ANIMATIONS_1.CPP_ANIMATIONS) {
             elem.slideDown(SLIDE_DURATION);
         }
         else {
@@ -82258,7 +83082,7 @@ class TemporaryObjectsOutlet {
         createMemoryObjectOutlet(elem, obj, this.memoryOutlet);
         this.objectElems[obj.address] = elem;
         this.objectsElem.prepend(elem);
-        if (exports.CPP_ANIMATIONS) {
+        if (CPP_ANIMATIONS_1.CPP_ANIMATIONS) {
             elem.slideDown(SLIDE_DURATION);
         }
         else {
@@ -82313,7 +83137,7 @@ class RunningCodeOutlet {
         this.refreshSimulation();
     }
     valueTransferOverlay(from, to, html, afterCallback, duration = VALUE_TRANSFER_DURATION) {
-        if (exports.CPP_ANIMATIONS) {
+        if (CPP_ANIMATIONS_1.CPP_ANIMATIONS) {
             let simOff = this.element.offset();
             let fromOff = from.offset();
             let toOff = to.offset();
@@ -82392,7 +83216,7 @@ class CodeStackOutlet extends RunningCodeOutlet {
         if (rtFunc.model.context.isLibrary) {
             // don't animate in
         }
-        else if (exports.CPP_ANIMATIONS) {
+        else if (CPP_ANIMATIONS_1.CPP_ANIMATIONS) {
             (this.frameElems.length == 1 ? frame.fadeIn(FADE_DURATION) : frame.slideDown({ duration: SLIDE_DURATION, progress: function () {
                     //                elem.scrollTop = elem.scrollHeight;
                 } }));
@@ -82408,7 +83232,7 @@ class CodeStackOutlet extends RunningCodeOutlet {
         //    return;
         //}
         let popped = this.frameElems.pop();
-        if (this.frameElems.length == 0 || !exports.CPP_ANIMATIONS) {
+        if (this.frameElems.length == 0 || !CPP_ANIMATIONS_1.CPP_ANIMATIONS) {
             popped.remove();
         }
         else {
