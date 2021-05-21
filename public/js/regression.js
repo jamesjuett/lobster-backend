@@ -32338,7 +32338,11 @@ class Program {
             // a conflicting overload that violates ODR
             let conflictingDef = entities_1.selectOverloadedDefinition(prevDef.definitions, def.declaration.type);
             if (conflictingDef) {
-                this.addNote(errors_1.CPPError.link.multiple_def(def, qualifiedName.str));
+                if (!def.declaration.isMemberFunction || def.isOutOfLineMemberFunctionDefinition) {
+                    this.addNote(errors_1.CPPError.link.multiple_def(def, qualifiedName.str));
+                }
+                // else ignore inline member functions with conflicting definitions
+                // those errors would be caught in the check for conflicting class definitions
             }
             else {
                 prevDef.addDefinition(def);
@@ -32354,7 +32358,6 @@ class Program {
      * @param def
      */
     registerClassDefinition(qualifiedName, def) {
-        var _a, _b;
         let prevDef = this.linkedClassDefinitions[qualifiedName.str];
         if (!prevDef) {
             return this.linkedClassDefinitions[qualifiedName.str] = def;
@@ -32369,9 +32372,7 @@ class Program {
                 return prevDef;
             }
             // Same tokens - ok
-            let prevDefText = (_a = prevDef.ast) === null || _a === void 0 ? void 0 : _a.source.text;
-            let defText = (_b = def.ast) === null || _b === void 0 ? void 0 : _b.source.text;
-            if (prevDefText && defText && prevDefText.replace(/\s/g, '') === defText.replace(/\s/g, '')) {
+            if (sameTokens(prevDef.ast, def.ast)) {
                 return prevDef;
             }
             def.addNote(errors_1.CPPError.link.class_same_tokens(def, prevDef));
@@ -32396,6 +32397,11 @@ class Program {
 }
 exports.Program = Program;
 ;
+function sameTokens(ast1, ast2) {
+    let ast1text = ast1 === null || ast1 === void 0 ? void 0 : ast1.source.text;
+    let ast2Text = ast2 === null || ast2 === void 0 ? void 0 : ast2.source.text;
+    return ast1text && ast2Text && ast1text.replace(/\s/g, '') === ast2Text.replace(/\s/g, '');
+}
 class SimpleProgram extends Program {
     constructor(source) {
         super([new SourceFile("main.cpp", source)], new Set(["main.cpp"]));
@@ -34944,7 +34950,7 @@ let OVERLOADABLE_OPS = {};
 });
 class FunctionDefinition extends constructs_1.BasicCPPConstruct {
     // i_childrenToExecute: ["memberInitializers", "body"], // TODO: why do regular functions have member initializers??
-    constructor(context, ast, declaration, parameters, ctorInitializer, body) {
+    constructor(context, ast, declaration, parameters, ctorInitializer, body, outOfLineMemberFunction) {
         super(context, ast);
         this.construct_type = "function_definition";
         this.kind = "FunctionDefinition";
@@ -34956,6 +34962,7 @@ class FunctionDefinition extends constructs_1.BasicCPPConstruct {
         this.attach(this.body = body);
         this.name = declaration.name;
         this.type = declaration.type;
+        this.isOutOfLineMemberFunctionDefinition = outOfLineMemberFunction;
         if (this.declaration.isDestructor) {
             // TODO: the cast on the line below seems kinda sus
             //       At this point (in a member function DEFINITION)
@@ -34975,16 +34982,18 @@ class FunctionDefinition extends constructs_1.BasicCPPConstruct {
             }
             declaration = decl;
         }
+        let outOfLine = false;
         // Consider "out-of-line" definitions as if they were in the class scope.
         // Need to change the parent to the context in which the definition occurs, though.
         if (constructs_1.isMemberSpecificationContext(declaration.context) && !constructs_1.isMemberSpecificationContext(context)) {
             context = constructs_1.createOutOfLineFunctionDefinitionContext(declaration.context, context);
+            outOfLine = true;
         }
         // Create implementation and body block (before params and body statements added yet)
         let receiverType;
         if (declaration.isMemberFunction) {
-            util_1.assert((_a = context.containingClass) === null || _a === void 0 ? void 0 : _a.isComplete(), "Member function definitions may not be compiled until their containing class definition has been completed.");
-            receiverType = context.containingClass.type;
+            util_1.assert((_a = declaration.context.containingClass) === null || _a === void 0 ? void 0 : _a.isComplete(), "Member function definitions may not be compiled until their containing class definition has been completed.");
+            receiverType = declaration.context.containingClass.type;
         }
         let functionContext = constructs_1.createFunctionContext(context, declaration.declaredEntity, receiverType);
         let bodyContext = constructs_1.createBlockContext(functionContext);
@@ -35015,7 +35024,7 @@ class FunctionDefinition extends constructs_1.BasicCPPConstruct {
         // Create the body "manually" using the ctor so we can give it the bodyContext create earlier.
         // We can't use the createFromAST function for the body Block, because that would create a new, nested block context.
         let body = new statements_1.Block(bodyContext, ast.body, ast.body.statements.map(s => statements_1.createStatementFromAST(s, bodyContext)));
-        return new FunctionDefinition(functionContext, ast, declaration, declaration.parameterDeclarations, ctorInitializer, body);
+        return new FunctionDefinition(functionContext, ast, declaration, declaration.parameterDeclarations, ctorInitializer, body, outOfLine);
     }
     createRuntimeFunction(parent, receiver) {
         return new functions_1.RuntimeFunction(this, parent.sim, parent, receiver);
