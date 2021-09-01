@@ -39061,36 +39061,40 @@ class CompoundAssignmentExpression extends expressionBase_1.Expression {
             this.attach(this.rhs = rhs);
             return;
         }
-        // Arithmetic types are required
-        if (!predicates_1.Predicates.isTypedExpression(lhs, types_1.isArithmeticType) || !predicates_1.Predicates.isTypedExpression(rhs, types_1.isArithmeticType)) {
-            this.addNote(errors_1.CPPError.expr.binary.arithmetic_operands(this, this.operator, lhs, rhs));
-            this.attach(this.lhs = lhs);
-            this.attach(this.rhs = rhs);
-            return;
-        }
-        // % operator and shift operators require integral operands
-        if ((this.equivalentBinaryOp === "%" || this.equivalentBinaryOp === "<<" || this.equivalentBinaryOp == ">>") &&
-            (!predicates_1.Predicates.isTypedExpression(lhs, types_1.isIntegralType) || !predicates_1.Predicates.isTypedExpression(rhs, types_1.isIntegralType))) {
-            this.addNote(errors_1.CPPError.expr.binary.integral_operands(this, this.operator, lhs, rhs));
-            this.attach(this.lhs = lhs);
-            this.attach(this.rhs = rhs);
-            return;
-        }
         if (lhs.valueCategory != "lvalue") {
             this.addNote(errors_1.CPPError.expr.assignment.lhs_lvalue(this));
         }
         else if (lhs.type.isConst) {
             this.addNote(errors_1.CPPError.expr.assignment.lhs_const(this));
         }
-        rhs = standardConversion(rhs, lhs.type.cvUnqualified());
         // TODO: add a check for a modifiable type (e.g. an array type is not modifiable)
         if (lhs.type.isConst) {
             this.addNote(errors_1.CPPError.expr.assignment.lhs_const(this));
         }
-        if (rhs.isWellTyped() && !types_1.sameType(rhs.type, lhs.type.cvUnqualified())) {
-            this.addNote(errors_1.CPPError.expr.assignment.convert(this, lhs, rhs));
+        // Check if it's a pointer offset
+        if ((this.equivalentBinaryOp === "+" || this.equivalentBinaryOp === "-") &&
+            predicates_1.Predicates.isTypedExpression(lhs, types_1.isPointerToCompleteObjectType) && predicates_1.Predicates.isTypedExpression(rhs, types_1.isIntegralType)) {
+            rhs = convertToPRValue(rhs);
         }
-        // TODO: do we need to check that lhs is an AtomicType? or is that necessary given all the other checks?
+        // otherwise it's an arithmetic binary operation
+        else {
+            // % operator and shift operators require integral operands
+            if ((this.equivalentBinaryOp === "%" || this.equivalentBinaryOp === "<<" || this.equivalentBinaryOp == ">>") &&
+                (!predicates_1.Predicates.isTypedExpression(lhs, types_1.isIntegralType) || !predicates_1.Predicates.isTypedExpression(rhs, types_1.isIntegralType))) {
+                this.addNote(errors_1.CPPError.expr.binary.integral_operands(this, this.operator, lhs, rhs));
+                this.attach(this.lhs = lhs);
+                this.attach(this.rhs = rhs);
+                return;
+            }
+            //Otherwise, Arithmetic types are required
+            if (!predicates_1.Predicates.isTypedExpression(lhs, types_1.isArithmeticType) || !predicates_1.Predicates.isTypedExpression(rhs, types_1.isArithmeticType)) {
+                this.addNote(errors_1.CPPError.expr.binary.arithmetic_operands(this, this.operator, lhs, rhs));
+                this.attach(this.lhs = lhs);
+                this.attach(this.rhs = rhs);
+                return;
+            }
+            rhs = standardConversion(rhs, lhs.type.cvUnqualified());
+        }
         this.type = lhs.type;
         this.attach(this.lhs = lhs);
         this.attach(this.rhs = rhs);
@@ -39144,8 +39148,22 @@ class RuntimeCompoundAssignment extends SimpleRuntimeExpression {
     }
     operate() {
         let lhsObj = this.lhs.evalResult;
-        let newVal = ARITHMETIC_BINARY_OPERATIONS[this.model.equivalentBinaryOp](this.lhs.evalResult.getValue(), this.rhs.evalResult);
-        lhsObj.writeValue(newVal);
+        if (lhsObj.isTyped(types_1.isArithmeticType)) {
+            let newVal = ARITHMETIC_BINARY_OPERATIONS[this.model.equivalentBinaryOp](lhsObj.getValue(), this.rhs.evalResult);
+            lhsObj.writeValue(newVal);
+        }
+        else if (lhsObj.isTyped(types_1.isPointerToCompleteObjectType)) {
+            // operator must be + or -, otherwise wouldn't have compiled
+            let delta = this.rhs.evalResult;
+            if (this.model.equivalentBinaryOp === "-") {
+                delta = delta.arithmeticNegate();
+            }
+            let newVal = lhsObj.getValue().pointerOffset(delta);
+            lhsObj.writeValue(newVal);
+        }
+        else {
+            util_1.assertFalse();
+        }
         this.setEvalResult(lhsObj);
     }
 }
@@ -40004,7 +40022,7 @@ class PrefixIncrementExpression extends UnaryOperatorExpression {
         else if (this.operator === "--" && predicates_1.Predicates.isTypedExpression(operand, types_1.isType(types_1.Bool))) {
             this.addNote(errors_1.CPPError.expr.prefixIncrement.decrement_bool_prohibited(this));
         }
-        else if (predicates_1.Predicates.isTypedExpression(operand, types_1.isArithmeticType) || predicates_1.Predicates.isTypedExpression(operand, types_1.isPointerToCompleteType)) {
+        else if (predicates_1.Predicates.isTypedExpression(operand, types_1.isArithmeticType) || predicates_1.Predicates.isTypedExpression(operand, types_1.isPointerToCompleteObjectType)) {
             this.type = operand.type;
             if (operand.type.isConst) {
                 this.addNote(errors_1.CPPError.expr.prefixIncrement.const_prohibited(this));
@@ -40963,7 +40981,7 @@ class PostfixIncrementExpression extends expressionBase_1.Expression {
         else if (this.operator === "--" && predicates_1.Predicates.isTypedExpression(operand, types_1.isType(types_1.Bool))) {
             this.addNote(errors_1.CPPError.expr.postfixIncrement.decrement_bool_prohibited(this));
         }
-        else if (predicates_1.Predicates.isTypedExpression(operand, types_1.isArithmeticType) || predicates_1.Predicates.isTypedExpression(operand, types_1.isPointerToCompleteType)) {
+        else if (predicates_1.Predicates.isTypedExpression(operand, types_1.isArithmeticType) || predicates_1.Predicates.isTypedExpression(operand, types_1.isPointerToCompleteObjectType)) {
             // Use cv-unqualified type since result is a prvalue
             this.type = operand.type.cvUnqualified();
             if (operand.type.isConst) {
@@ -43652,8 +43670,9 @@ class CtorInitializer extends constructs_1.BasicCPPConstruct {
     createDefaultOutlet(element, parent) {
         return new codeOutlets_1.CtorInitializerOutlet(element, this, parent);
     }
-    isSemanticallyEquivalent_impl(other, equivalenceContext) {
-        return other.construct_type === this.construct_type;
+    isSemanticallyEquivalent_impl(other, ec) {
+        return other.construct_type === this.construct_type
+            && constructs_1.areAllSemanticallyEquivalent(this.children, other.children, ec);
         // TODO semantic equivalence
     }
 }
@@ -47748,7 +47767,7 @@ RuntimeForStatement.upNextFns = [
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ArrayPointerType = exports.PointerType = exports.toHexadecimalString = exports.Double = exports.Float = exports.FloatingPointType = exports.Bool = exports.Size_t = exports.Int = exports.Char = exports.ArithmeticType = exports.SimpleType = exports.AtomicType = exports.VoidType = exports.isCompleteParameterType = exports.isPotentialParameterType = exports.isCompleteReturnType = exports.isPotentialReturnType = exports.isCompleteObjectType = exports.isIncompleteObjectType = exports.isPotentiallyCompleteObjectType = exports.isVoidType = exports.isFunctionType = exports.isArrayElemType = exports.isPotentiallyCompleteArrayType = exports.isArrayOfUnknownBoundType = exports.isBoundedArrayOfType = exports.isBoundedArrayType = exports.isCompleteClassType = exports.isPotentiallyCompleteClassType = exports.isReferenceToCompleteType = exports.isReferenceType = exports.isObjectPointerType = exports.isArrayPointerToType = exports.isArrayPointerType = exports.isPointerToCompleteType = exports.isPointerToType = exports.isPointerType = exports.isFloatingPointType = exports.isIntegralType = exports.isArithmeticType = exports.isAtomicType = exports.isCvConvertible = exports.referenceRelated = exports.referenceCompatible = exports.covariantType = exports.subType = exports.similarType = exports.sameType = exports.isType = void 0;
+exports.ArrayPointerType = exports.PointerType = exports.toHexadecimalString = exports.Double = exports.Float = exports.FloatingPointType = exports.Bool = exports.Size_t = exports.Int = exports.Char = exports.ArithmeticType = exports.SimpleType = exports.AtomicType = exports.VoidType = exports.isCompleteParameterType = exports.isPotentialParameterType = exports.isCompleteReturnType = exports.isPotentialReturnType = exports.isCompleteObjectType = exports.isIncompleteObjectType = exports.isPotentiallyCompleteObjectType = exports.isVoidType = exports.isFunctionType = exports.isArrayElemType = exports.isPotentiallyCompleteArrayType = exports.isArrayOfUnknownBoundType = exports.isBoundedArrayOfType = exports.isBoundedArrayType = exports.isCompleteClassType = exports.isPotentiallyCompleteClassType = exports.isReferenceToCompleteType = exports.isReferenceType = exports.isObjectPointerType = exports.isArrayPointerToType = exports.isArrayPointerType = exports.isPointerToCompleteObjectType = exports.isPointerToType = exports.isPointerType = exports.isFloatingPointType = exports.isIntegralType = exports.isArithmeticType = exports.isAtomicType = exports.isCvConvertible = exports.referenceRelated = exports.referenceCompatible = exports.covariantType = exports.subType = exports.similarType = exports.sameType = exports.isType = void 0;
 exports.builtInTypes = exports.isBuiltInTypeName = exports.FunctionType = exports.createClassType = exports.ArrayOfUnknownBoundType = exports.BoundedArrayType = exports.peelReference = exports.ReferenceType = exports.ObjectPointerType = void 0;
 const util_1 = __webpack_require__(6560);
 const runtimeEnvironment_1 = __webpack_require__(5320);
@@ -48064,10 +48083,10 @@ function isPointerToType(ctor) {
     return ((type) => type.isPointerToType(ctor));
 }
 exports.isPointerToType = isPointerToType;
-function isPointerToCompleteType(type) {
+function isPointerToCompleteObjectType(type) {
     return type.isPointerToCompleteObjectType();
 }
-exports.isPointerToCompleteType = isPointerToCompleteType;
+exports.isPointerToCompleteObjectType = isPointerToCompleteObjectType;
 function isArrayPointerType(type) {
     return type.isArrayPointerType();
 }
@@ -66986,6 +67005,52 @@ int main() {
         new verifiers_1.NoErrorsNoWarningsVerifier(),
         new verifiers_1.NoBadRuntimeEventsVerifier(true)
     ]);
+    // Pointer Compound Assignment---------------------
+    new verifiers_1.SingleTranslationUnitTest("Pointer Compound Assignment Test", `#include <iostream>
+using namespace std;
+
+int main() {
+
+int arr[5] = {1, 2, 3, 4, 5};
+int *p0 = &arr[0];
+int *p1 = &arr[1];
+int *p2 = &arr[2];
+int *p3 = &arr[3];
+int *p4 = &arr[4];
+
+int *ptr = &arr[0];
+assert(ptr == p0);
+
+ptr += 1;
+assert(ptr == p1);
+
+ptr += 1;
+assert(ptr == p2);
+
+ptr += 2;
+assert(ptr == p4);
+
+ptr -= 4;
+assert(ptr == p0);
+
+ptr += 0;
+assert(ptr == p0);
+
+ptr -= 0;
+assert(ptr == p0);
+
+ptr = p4;
+
+ptr -= 1;
+assert(ptr == p3);
+
+ptr -= 1;
+assert(ptr == p2);
+
+}`, [
+        new verifiers_1.NoErrorsNoWarningsVerifier(),
+        new verifiers_1.NoBadRuntimeEventsVerifier(true)
+    ]);
     // Basic Array Aggregate Initialization---------------------
     new verifiers_1.SingleTranslationUnitTest("Basic Array Aggregate Initialization Test", `using namespace std;
 
@@ -70143,25 +70208,25 @@ exports.ProjectEditor = ProjectEditor;
 function createCompilationOutletHTML() {
     return `
     <div>
-        <h3>Compilation Units</h3>
-        <p>A program may be composed of many different compilation units (a.k.a translation units), one for each source file
+        <b>Compilation Units</b>
+        <!-- <p>A program may be composed of many different compilation units (a.k.a translation units), one for each source file
             that needs to be compiled into the executable program. Generally, you want a compilation
             unit for each .cpp file, and these are the files you would list out in a compile command.
             The files being used for this purpose are highlighted below. Note that files may be
             indirectly used if they are #included in other compilation units, even if they are not
             selected to form a compilation unit here.
-        </p>
-        <p style="font-weight: bold;">
-            Click files below to toggle whether they are being used to create a compilation unit.
+        </p> -->
+        <p style="font-size: smaller;">
+            Toggle which <code>.cpp</code> files are being compiled. (Do not include <code>.h</code> files here.)
         </p>
         <ul class="translation-units-list list-inline">
         </ul>
     </div>
     <div>
-        <h3>Compilation Errors</h3>
-        <p>These errors were based on your last compilation.
+        <b>Compilation Errors</b>
+        <!-- <p>These errors were based on your last compilation. -->
         </p>
-        <ul class="compilation-notes-list">
+        <ul class="list-group compilation-notes-list">
         </ul>
     </div>`;
 }
@@ -70233,8 +70298,12 @@ class CompilationNotesOutlet {
     }
     updateNotes(program) {
         this.element.empty();
+        if (program.notes.allNotes.length === 0) {
+            this.element.append("No errors here :)");
+            return;
+        }
         program.notes.allNotes.forEach(note => {
-            let item = $('<li></li>').append(this.createBadgeForNote(note)).append(" ");
+            let item = $('<li class="list-group-item"></li>').append(this.createBadgeForNote(note)).append(" ");
             let ref = note.primarySourceReference;
             if (ref) {
                 let sourceReferenceElem = $('<span class="lobster-source-reference"></span>');
@@ -70319,8 +70388,14 @@ class CompilationStatusOutlet {
         this.numWarningsElem.html("" + this.project.program.notes.numNotes(errors_1.NoteKind.WARNING));
         this.numStyleElem.html("" + this.project.program.notes.numNotes(errors_1.NoteKind.STYLE));
         this.compileButton.removeClass("btn-warning-muted");
-        this.compileButton.addClass("btn-success-muted");
-        this.compileButton.html('<span class="glyphicon glyphicon-ok"></span> Compiled');
+        if (this.project.program.isCompiled()) {
+            this.compileButton.html('<span class="glyphicon glyphicon-ok"></span> Compiled');
+            this.compileButton.addClass("btn-success-muted");
+        }
+        else {
+            this.compileButton.html('<span class="glyphicon glyphicon-remove"></span> Errors Detected');
+            this.compileButton.addClass("btn-danger-muted");
+        }
     }
     onCompilationOutOfDate() {
         this.compileButton.removeClass("btn-success-muted");
