@@ -45062,6 +45062,7 @@ class CPPObject {
     beginLifetime() {
         util_1.assert(!this.isAlive);
         util_1.asMutable(this).isAlive = true;
+        this.observable.send("lifetimeBegan", this);
     }
     kill(rt) {
         // kill subobjects
@@ -67132,7 +67133,7 @@ int main() {
                 y: 2.0,
                 ch: "*".charCodeAt(0)
             });
-        }, "2.5 * 2.0")
+        }, "2.5 * 2.0") // input typed to cin
     ]);
     new verifiers_1.SingleTranslationUnitTest("EECS 183 cin test 2", `#include <iostream>
 using namespace std;
@@ -67153,7 +67154,7 @@ int main() {
                 z: 0,
                 ch: "+".charCodeAt(0)
             });
-        }, "3.5 + 3.5")
+        }, "3.5 + 3.5") // input typed to cin
     ]);
 }
 exports.createCinTests = createCinTests;

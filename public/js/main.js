@@ -58710,6 +58710,7 @@ class CPPObject {
     beginLifetime() {
         util_1.assert(!this.isAlive);
         util_1.asMutable(this).isAlive = true;
+        this.observable.send("lifetimeBegan", this);
     }
     kill(rt) {
         // kill subobjects
@@ -85589,7 +85590,13 @@ class PointerMemoryObjectOutlet extends SingleMemoryObject {
             elem.addClass("invalid");
         }
     }
+    onAtomicObjectInitialized(object) {
+        this.memoryOutlet.addSVGOverlay(new SVGPointerArrowMemoryOverlay(object, this.memoryOutlet));
+    }
 }
+__decorate([
+    observe_1.messageResponse("lifetimeBegan", "unwrap")
+], PointerMemoryObjectOutlet.prototype, "onAtomicObjectInitialized", null);
 exports.PointerMemoryObjectOutlet = PointerMemoryObjectOutlet;
 // setInterval(function() {
 //     var temp = Outlets.CPP.CPP_ANIMATIONS;
