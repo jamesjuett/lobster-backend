@@ -54800,6 +54800,7 @@ class RuntimeArrayAggregateInitializer extends RuntimeListInitializer {
         }
         else {
             let target = this.model.target.runtimeLookup(this);
+            target.beginLifetime();
             this.observable.send("arrayObjectInitialized", this);
             this.startCleanup();
         }

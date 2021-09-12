@@ -68448,6 +68448,7 @@ class RuntimeArrayAggregateInitializer extends RuntimeListInitializer {
         }
         else {
             let target = this.model.target.runtimeLookup(this);
+            target.beginLifetime();
             this.observable.send("arrayObjectInitialized", this);
             this.startCleanup();
         }
@@ -93049,6 +93050,7 @@ class InstantMemoryDiagramOutlet {
             this.memoryOutlet.setMemory(sim.memory);
             let simRunner = new simulationRunners_1.AsynchronousSimulationRunner(sim);
             yield simRunner.stepToEndOfMain(0, 1000);
+            this.element.find(".code-memoryObject .set").removeClass("set");
         });
     }
     onCompilationFinished() {
@@ -96594,8 +96596,14 @@ exports.ReferenceMemoryOutlet = ReferenceMemoryOutlet;
 class ArrayMemoryObjectOutlet extends MemoryObjectOutlet {
     constructor(element, object, memoryOutlet) {
         super(element, object, memoryOutlet);
-        this.element.addClass("code-memoryObjectArray");
-        this.objElem = $("<div class='array'></div>");
+        this.element.addClass("code-memoryObject-array");
+        let leftContainer = $('<div class="code-memoryObject-array-left"></div>').appendTo(this.element);
+        this.addrElem = $(`<div class='address'>${types_1.toHexadecimalString(this.object.address)}</div>`);
+        leftContainer.append(this.addrElem);
+        if (this.object.name) {
+            leftContainer.append($("<div class='entity'>" + (this.object.name || "") + "</div>"));
+        }
+        this.objElem = $("<div class='code-memoryObject-array-elements'></div>");
         this.elemOutlets = this.object.getArrayElemSubobjects().map((elemSubobject, i) => {
             let elemElem = $('<div></div>');
             let elemContainer = $('<div style="display: inline-block; margin-bottom: 5px; text-align: center" class="arrayElem"></div>');
@@ -97465,7 +97473,7 @@ class IstreamBufferOutlet {
     }
     onIostateUpdated() {
         var _a, _b, _c;
-        this.iostateElem.html("").hide();
+        this.iostateElem.hide().html("");
         if ((_a = this.istream) === null || _a === void 0 ? void 0 : _a.fail()) {
             this.iostateElem.show().append('<span class="label label-danger">fail</span>');
         }
