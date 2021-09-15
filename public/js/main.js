@@ -64031,6 +64031,7 @@ class RuntimeInputOperatorExpression extends expressionBase_1.RuntimeExpression 
         }
     }
     stepForwardImpl() {
+        this.sim.cin.skipws();
         let result = this.sim.cin.extractAndParseFromBuffer(this.right.evalResult.type);
         if (result) {
             this.right.evalResult.writeValue(result.result);
