@@ -63684,7 +63684,7 @@ class ArithmeticBinaryOperatorExpression extends BinaryOperatorExpression {
         // HACK: only consider operator overloads if both are class type.
         // TODO: eventually, all input/output expressions should probably
         // be implemented as overloaded operators. 
-        if (predicates_1.Predicates.isTypedExpression(left, types_1.isPotentiallyCompleteClassType) && predicates_1.Predicates.isTypedExpression(right, types_1.isPotentiallyCompleteClassType)) {
+        if (predicates_1.Predicates.isTypedExpression(left, types_1.isPotentiallyCompleteClassType) || predicates_1.Predicates.isTypedExpression(right, types_1.isPotentiallyCompleteClassType)) {
             let overload = selectOperatorOverload(context, ast, op, [left, right]);
             if (overload) {
                 return overload;
@@ -72215,7 +72215,7 @@ class StandardInputStream {
     }
     extractDoubleFromBuffer() {
         // matches anything with numbers and a dot
-        let m = this.buffer.match(/^[+-]?[0123456789]*\.[0123456789]*/);
+        let m = this.buffer.match(/^[+-]?[0123456789]*\.?[0123456789]*/);
         if (m && m[0] !== "." && m[0] !== "+." && m[0] !== "-.") { // a match that isn't just a .
             // match found
             this.updateBuffer(this.buffer.substring(m[0].length));

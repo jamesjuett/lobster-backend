@@ -50036,7 +50036,7 @@ class ArithmeticBinaryOperatorExpression extends BinaryOperatorExpression {
         // HACK: only consider operator overloads if both are class type.
         // TODO: eventually, all input/output expressions should probably
         // be implemented as overloaded operators. 
-        if (predicates_1.Predicates.isTypedExpression(left, types_1.isPotentiallyCompleteClassType) && predicates_1.Predicates.isTypedExpression(right, types_1.isPotentiallyCompleteClassType)) {
+        if (predicates_1.Predicates.isTypedExpression(left, types_1.isPotentiallyCompleteClassType) || predicates_1.Predicates.isTypedExpression(right, types_1.isPotentiallyCompleteClassType)) {
             let overload = selectOperatorOverload(context, ast, op, [left, right]);
             if (overload) {
                 return overload;
@@ -58567,7 +58567,7 @@ class StandardInputStream {
     }
     extractDoubleFromBuffer() {
         // matches anything with numbers and a dot
-        let m = this.buffer.match(/^[+-]?[0123456789]*\.[0123456789]*/);
+        let m = this.buffer.match(/^[+-]?[0123456789]*\.?[0123456789]*/);
         if (m && m[0] !== "." && m[0] !== "+." && m[0] !== "-.") { // a match that isn't just a .
             // match found
             this.updateBuffer(this.buffer.substring(m[0].length));
@@ -77942,6 +77942,45 @@ int main() {
         new verifiers_1.NoErrorsNoWarningsVerifier(),
         new verifiers_1.NoBadRuntimeEventsVerifier(true)
     ]);
+    // string operators test
+    new verifiers_1.SingleTranslationUnitTest("String Operators Test", `#include <iostream>
+#include <string>
+using namespace std;
+
+int main() {
+  string s;
+  cout << s << endl;
+  s = s + 'a'; // a
+  cout << s << endl;
+  s = 'b' + s; // ba
+  cout << s << endl;
+  s += 'b'; // bab
+  cout << s << endl;
+  string c = "c";
+  s = c + s; // cbab
+  cout << s << endl;
+  s = s + c; // cbabc
+  cout << s << endl;
+  s = "d" + s; // dcbabc
+  cout << s << endl;
+  s = s + "d"; // dcbabcd
+  cout << s << endl;
+  s = s += "e"; // dcbabcde
+  cout << s << endl;
+}`, [
+        new verifiers_1.NoErrorsNoWarningsVerifier(),
+        new verifiers_1.NoBadRuntimeEventsVerifier(true),
+        new verifiers_1.OutputVerifier(`
+a
+ba
+bab
+cbab
+cbabc
+dcbabc
+dcbabcd
+dcbabcde
+`)
+    ]);
     // Basic Compound Assignment---------------------
     new verifiers_1.SingleTranslationUnitTest("Basic Compound Assignment Test", `#include <iostream>
 using namespace std;
@@ -78246,6 +78285,10 @@ int main() {
   assert(cin.rdstate() == ${streams_1.IOState.good});
 
   cin >> x;
+  assert(x == 3);
+  assert(cin.rdstate() == ${streams_1.IOState.good});
+
+  cin >> x;
   assert(x == 2.5);
   assert(cin.rdstate() == ${streams_1.IOState.good});
 
@@ -78294,7 +78337,7 @@ int main() {
   assert(cin.rdstate() == ${streams_1.IOState.good});
 }`, [
         new verifiers_1.NoErrorsNoWarningsVerifier(),
-        new verifiers_1.NoBadRuntimeEventsVerifier(true, "2.5 2.0 2. 2.5blah 2.0whee 2.whoa 2.5.5 0.0005 000.0005 000.0005.234" // input typed to cin
+        new verifiers_1.NoBadRuntimeEventsVerifier(true, "2.5 2.0 2. 3 2.5blah 2.0whee 2.whoa 2.5.5 0.0005 000.0005 000.0005.234" // input typed to cin
         )
     ]);
 }
