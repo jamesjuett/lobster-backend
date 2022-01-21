@@ -57,3 +57,11 @@ mkcert localhost
 ```
 
 Then copy those files to `./secrets/certs`.
+
+
+### Secrets
+
+Create a secret key for JWT:
+```
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'));" > secrets/jwt_secret
+```
