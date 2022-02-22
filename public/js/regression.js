@@ -31779,10 +31779,6 @@ class FunctionCallExpression extends expressionBase_1.Expression {
         let returnType = operand.entity.type.returnType;
         this.type = (0, types_1.peelReference)(returnType);
         this.valueCategory = returnType instanceof types_1.ReferenceType ? "lvalue" : "prvalue";
-        // let staticReceiver: ObjectEntity<CompleteClassType> | undefined;
-        // if (operand instanceof DotExpression) {
-        //     staticReceiver = operand.functionCallReceiver;
-        // }
         // If we get to here, we don't attach the args directly since they will be attached under the function call.
         this.attach(this.call = new FunctionCall_1.FunctionCall(context, operand.entity, args, operand.context.contextualReceiverType));
     }
@@ -34895,8 +34891,8 @@ class FunctionDefinition extends constructs_1.BasicCPPConstruct {
         // Create implementation and body block (before params and body statements added yet)
         let receiverType;
         if (declaration.isMemberFunction) {
-            (0, util_1.assert)((_a = declaration.context.containingClass) === null || _a === void 0 ? void 0 : _a.isComplete(), "Member function definitions may not be compiled until their containing class definition has been completed.");
-            receiverType = declaration.context.containingClass.type;
+            (0, util_1.assert)((_a = declaration.type.receiverType) === null || _a === void 0 ? void 0 : _a.isComplete(), "Member function definitions may not be compiled until their containing class definition has been completed.");
+            receiverType = declaration.type.receiverType;
         }
         let functionContext = (0, constructs_1.createFunctionContext)(context, declaration.declaredEntity, receiverType);
         let bodyContext = (0, constructs_1.createBlockContext)(functionContext);
@@ -35936,7 +35932,7 @@ exports.FunctionDefinitionGroup = FunctionDefinitionGroup;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.selectOverloadedDefinition = exports.ClassEntity = exports.FunctionEntity = exports.TemporaryObjectEntity = exports.MemberReferenceEntity = exports.MemberObjectEntity = exports.MemberAccessEntity = exports.BaseSubobjectEntity = exports.DynamicLengthArrayNextElementEntity = exports.ArraySubobjectEntity = exports.NewArrayEntity = exports.NewObjectEntity = exports.ReceiverEntity = exports.PassByReferenceParameterEntity = exports.PassByValueParameterEntity = exports.ReturnByReferenceEntity = exports.ReturnObjectEntity = exports.GlobalObjectEntity = exports.LocalReferenceEntity = exports.LocalObjectEntity = exports.runtimeObjectLookup = exports.FunctionOverloadGroup = exports.NamedEntity = exports.areEntitiesSemanticallyEquivalent = exports.CPPEntity = exports.ClassScope = exports.NamespaceScope = exports.NamedScope = exports.BlockScope = exports.Scope = void 0;
+exports.selectOverloadedDefinition = exports.ClassEntity = exports.FunctionEntity = exports.TemporaryObjectEntity = exports.MemberReferenceEntity = exports.MemberObjectEntity = exports.BaseSubobjectEntity = exports.DynamicLengthArrayNextElementEntity = exports.ArraySubobjectEntity = exports.NewArrayEntity = exports.NewObjectEntity = exports.ReceiverEntity = exports.PassByReferenceParameterEntity = exports.PassByValueParameterEntity = exports.ReturnByReferenceEntity = exports.ReturnObjectEntity = exports.GlobalObjectEntity = exports.LocalReferenceEntity = exports.LocalObjectEntity = exports.runtimeObjectLookup = exports.FunctionOverloadGroup = exports.NamedEntity = exports.areEntitiesSemanticallyEquivalent = exports.CPPEntity = exports.ClassScope = exports.NamespaceScope = exports.NamedScope = exports.BlockScope = exports.Scope = void 0;
 const types_1 = __webpack_require__(8716);
 const util_1 = __webpack_require__(6560);
 const observe_1 = __webpack_require__(5114);
@@ -36816,30 +36812,6 @@ class BaseSubobjectEntity extends CPPEntity {
     }
 }
 exports.BaseSubobjectEntity = BaseSubobjectEntity;
-class MemberAccessEntity extends CPPEntity {
-    constructor(containingEntity, type, name) {
-        super(type);
-        this.variableKind = "object";
-        this.containingEntity = containingEntity;
-        this.name = name;
-    }
-    runtimeLookup(rtConstruct) {
-        // Cast below should be <CPPObject<T>>, NOT MemberSubobject<T>.
-        // See return type and documentation for getMemberSubobject()
-        return this.containingEntity.runtimeLookup(rtConstruct).getMemberObject(this.name);
-    }
-    isTyped(predicate) {
-        return predicate(this.type);
-    }
-    describe() {
-        let containingObjectDesc = this.containingEntity.describe();
-        return {
-            name: containingObjectDesc.name + "." + this.name,
-            message: "the " + this.name + " member of " + containingObjectDesc.message
-        };
-    }
-}
-exports.MemberAccessEntity = MemberAccessEntity;
 // export class BaseClassEntity extends CPPEntity<ClassType> implements ObjectEntity<ClassType> {
 //     protected static readonly _name = "BaseClassEntity";
 //     // storage: "none",
@@ -38131,8 +38103,8 @@ exports.CPPError = {
             decrement_bool_prohibited: function (construct) {
                 return new CompilerNote(construct, NoteKind.ERROR, "expr.postfixIncrement.decrement_bool_prohibited", "The -- operator may not be used on an object of boolean type.");
             },
-            const_prohibited: function (construct) {
-                return new CompilerNote(construct, NoteKind.ERROR, "expr.postfixIncrement.const_prohibited", "The -- operator may not be used on a const object.");
+            const_prohibited: function (construct, operator) {
+                return new CompilerNote(construct, NoteKind.ERROR, "expr.postfixIncrement.const_prohibited", "The " + operator + " operator may not be used on a const object.");
             }
         },
         functionCall: {
@@ -40502,7 +40474,7 @@ class RuntimeSubscriptExpression extends SimpleRuntimeExpression {
 exports.RuntimeSubscriptExpression = RuntimeSubscriptExpression;
 class DotExpression extends expressionBase_1.Expression {
     constructor(context, ast, operand, memberName) {
-        var _a;
+        var _a, _b, _c;
         super(context, ast);
         this.construct_type = "dot_expression";
         this.valueCategory = "lvalue";
@@ -40515,9 +40487,6 @@ class DotExpression extends expressionBase_1.Expression {
         if (!predicates_1.Predicates.isTypedExpression(this.operand, types_1.isCompleteClassType)) {
             this.addNote(errors_1.CPPError.expr.dot.incomplete_class_type_prohibited(this));
             return;
-        }
-        if (this.operand instanceof IdentifierExpression) {
-            this.functionCallReceiver = this.operand.getEntity();
         }
         let classType = this.operand.type;
         let lookupResult = typeof memberName === "string"
@@ -40546,7 +40515,17 @@ class DotExpression extends expressionBase_1.Expression {
                 }
                 this.entity = entityOrError;
         }
-        this.type = (0, types_1.peelReference)((_a = this.entity) === null || _a === void 0 ? void 0 : _a.type);
+        // Check if this is an implicit member access operation
+        if (((_a = this.entity) === null || _a === void 0 ? void 0 : _a.declarationKind) === "variable"
+            && this.entity.variableKind === "object"
+            && ((_b = this.context.contextualReceiverType) === null || _b === void 0 ? void 0 : _b.isConst)) {
+            // A non-reference member variable will inherit const from the
+            // receiver of a member access operation.
+            this.type = (0, types_1.peelReference)(this.entity.type.cvQualified(true));
+        }
+        else {
+            this.type = (0, types_1.peelReference)((_c = this.entity) === null || _c === void 0 ? void 0 : _c.type);
+        }
     }
     static createFromAST(ast, context) {
         var _a;
@@ -40621,73 +40600,9 @@ class RuntimeFunctionDotExpression extends expressionBase_1.RuntimeExpression {
     }
 }
 exports.RuntimeFunctionDotExpression = RuntimeFunctionDotExpression;
-// export var Dot  = Expression.extend({
-//     _name: "Dot",
-//     i_runtimeConstructClass : RuntimeMemberAccess,
-//     i_childrenToCreate : ["operand"],
-//     i_childrenToExecute : ["operand"],
-//     i_createFromAST : function(ast, context) {
-//         Dot._parent.i_createFromAST.apply(this, arguments);
-//         this.memberName = ast.member.identifier;
-//     },
-//     compile : function(compilationContext) {
-//         this.i_paramTypes = compilationContext && compilationContext.paramTypes;
-//         Expressions.Dot._parent.compile.apply(this, arguments);
-//     },
-//     typeCheck : function(){
-//         if (!isA(this.operand.type, Types.Class)) {
-//             this.addNote(CPPError.expr.dot.class_type(this));
-//             return false;
-//         }
-//         // Find out what this identifies
-//         try {
-//             this.entity = this.operand.type.classScope.requiredMemberLookup(this.memberName, {paramTypes: this.i_paramTypes, isThisConst:this.operand.type.isConst});
-//             this.type = this.entity.type;
-//         }
-//         catch(e){
-//             if (isA(e, SemanticExceptions.BadLookup)){
-//                 // this.addNote(CPPError.expr.dot.memberLookup(this, this.operand.type, this.memberName));
-//                 // TODO: why is this commented?
-//                 this.addNote(e.annotation(this));
-//             }
-//             else{
-//                 throw e;
-//             }
-//         }
-//         if (isA(this.type, Types.Reference)){
-//             this.type = this.type.refTo;
-//             this.valueCategory = "lvalue";
-//         }
-//         else if (this.operand.valueCategory === "lvalue"){
-//             this.valueCategory = "lvalue";
-//         }
-//         else{
-//             this.valueCategory = "xvalue";
-//         }
-//     },
-//     upNext : function(sim: Simulation, rtConstruct: RuntimeConstruct){
-//         if (inst.index === "subexpressions"){
-//             return Expression.upNext.apply(this, arguments);
-//         }
-//         else{
-//             // entity may be MemberVariableEntity but should never be an AutoEntity
-//             assert(!isA(this.entity, AutoEntity));
-//             inst.setObjectAccessedFrom(inst.childInstances.operand.evalResult);
-//             inst.setEvalResult(this.entity.runtimeLookup(sim, inst));
-//             this.done(sim, inst);
-//             return true;
-//         }
-//     },
-//     isTailChild : function(child){
-//         return {isTail: false,
-//             reason: "The dot operation itself will happen after the recursive call returns.",
-//             others: [this]
-//         };
-//     }
-// });
 class ArrowExpression extends expressionBase_1.Expression {
     constructor(context, ast, operand, memberName) {
-        var _a;
+        var _a, _b, _c;
         super(context, ast);
         this.construct_type = "arrow_expression";
         this.valueCategory = "lvalue";
@@ -40729,7 +40644,17 @@ class ArrowExpression extends expressionBase_1.Expression {
                 }
                 this.entity = entityOrError;
         }
-        this.type = (0, types_1.peelReference)((_a = this.entity) === null || _a === void 0 ? void 0 : _a.type);
+        // Check if this is an implicit member access operation
+        if (((_a = this.entity) === null || _a === void 0 ? void 0 : _a.declarationKind) === "variable"
+            && this.entity.variableKind === "object"
+            && ((_b = this.context.contextualReceiverType) === null || _b === void 0 ? void 0 : _b.isConst)) {
+            // A non-reference member variable will inherit const from the
+            // receiver of a member access operation.
+            this.type = (0, types_1.peelReference)(this.entity.type.cvQualified(true));
+        }
+        else {
+            this.type = (0, types_1.peelReference)((_c = this.entity) === null || _c === void 0 ? void 0 : _c.type);
+        }
     }
     static createFromAST(ast, context) {
         var _a;
@@ -40886,7 +40811,7 @@ class PostfixIncrementExpression extends expressionBase_1.Expression {
             // Use cv-unqualified type since result is a prvalue
             this.type = operand.type.cvUnqualified();
             if (operand.type.isConst) {
-                this.addNote(errors_1.CPPError.expr.postfixIncrement.const_prohibited(this));
+                this.addNote(errors_1.CPPError.expr.postfixIncrement.const_prohibited(this, this.operator));
             }
         }
         else {
@@ -41142,7 +41067,7 @@ class IdentifierExpression extends expressionBase_1.Expression {
     //     this.identifierText = qualifiedNameString(this.identifier);
     // },
     constructor(context, ast, name) {
-        var _a;
+        var _a, _b, _c;
         super(context, ast);
         this.construct_type = "identifier_expression";
         this.valueCategory = "lvalue";
@@ -41165,7 +41090,18 @@ class IdentifierExpression extends expressionBase_1.Expression {
             default:
                 this.entity = entityOrError;
         }
-        this.type = (0, types_1.peelReference)((_a = this.entity) === null || _a === void 0 ? void 0 : _a.type);
+        // Check if this is an implicit member access operation
+        if (((_a = this.entity) === null || _a === void 0 ? void 0 : _a.declarationKind) === "variable"
+            && this.entity.variableLocation === "member"
+            && this.entity.variableKind === "object"
+            && ((_b = this.context.contextualReceiverType) === null || _b === void 0 ? void 0 : _b.isConst)) {
+            // A non-reference member variable will inherit const from the
+            // receiver of a member access operation.
+            this.type = (0, types_1.peelReference)(this.entity.type.cvQualified(true));
+        }
+        else {
+            this.type = (0, types_1.peelReference)((_c = this.entity) === null || _c === void 0 ? void 0 : _c.type);
+        }
     }
     static createFromAST(ast, context) {
         return new IdentifierExpression(context, ast, (0, lexical_1.astToIdentifier)(ast.identifier));
@@ -48721,7 +48657,7 @@ class ReferenceType extends TypeBase {
         return "" + value;
     }
     _cvQualifiedImpl(isConst, isVolatile) {
-        return new ReferenceType(this.refTo);
+        return new ReferenceType(this.refTo); // does nothing, reference can't be cv qualified
     }
 }
 exports.ReferenceType = ReferenceType;
@@ -68599,12 +68535,16 @@ var escapes = ["\\\"", "\\'", "\\?", "\\\\", "\\a", "\\b", "\\f", "\\n", "\\r", 
 var escaped = ["\"", "\'", "", "\\", "", "\b", "\f", "\n", "\r", "\t", "\v", "\0"];
 function escapeString(text) {
     for (var i = 0; i < escapes.length; ++i) {
-        text = text.replace(escapes[i], escaped[i]);
+        // text = text.replace(escapes[i], escaped[i]);
+        //! requires ES 2021
+        // text = text.replaceAll(escapes[i], escaped[i]);
+        while (text.includes(escapes[i])) {
+            text = text.replace(escapes[i], escaped[i]);
+        }
     }
     return text;
 }
 exports.escapeString = escapeString;
-;
 function unescapeString(text) {
     var newStr = "";
     for (var i = 0; i < text.length; ++i) {
