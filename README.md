@@ -1,5 +1,9 @@
 # lobster-backend
 
+This repository is a **complete mess**. I'll clean it up someday. Feel free to look around.
+
+There's a discord now: https://discord.gg/rHvsm3eCu2
+
 ## Database
 
 ### Knex
