@@ -7,6 +7,7 @@ import { createCourseProject } from "../db/db_projects";
 import { withoutProps } from "../db/db_types";
 import { jsonBodyParser, validateBody, validateParam, createRoute, validateParamId, requireSuperUser, NO_AUTHORIZATION, NO_PREPROCESSING, NO_VALIDATION } from "./common";
 import { validateBodyProject } from "./projects";
+import { duplicateExercise } from "../db/db_exercises";
 
 const validateParamShortName = validateParam("short_name").trim().isLength({min: 1, max: 20});
 const validateParamTerm = validateParam("term").isIn(["fall", "winter", "spring", "summer"]);
@@ -168,9 +169,39 @@ courses_router
           return;
         }
         
+        // Copy course
         let [copy] = await query("courses")
-          .insert(withoutProps(orig, "id"))
+          .insert({
+            ...withoutProps(orig, "id"),
+            short_name: orig.short_name + "_copy",
+          })
           .returning("*");
+
+        // Copy course projects
+        let orig_projects = await getAllCourseProjects(copy.id);
+        await Promise.all(
+          orig_projects.map(async (orig_project) => {
+            let new_ex = orig_project.exercise_id !== null
+              ? await duplicateExercise(orig_project.exercise_id)
+              : undefined;
+            return createCourseProject(
+              copy.id,
+              orig_project.name,
+              orig_project.contents,
+              new_ex?.id,
+              orig_project.is_public
+            );
+          }
+        ));
+        
+        // Add current user as course admin
+        let userInfo = getJwtUserInfo(req);
+        await query("users_courses").insert({
+          user_id: userInfo.id,
+          course_id: copy.id,
+          is_admin: true,
+        });
+
 
         if (copy) {
           res.status(201);

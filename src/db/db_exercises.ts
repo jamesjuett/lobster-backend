@@ -1,4 +1,5 @@
 import { query } from "./db";
+import { withoutProps } from "./db_types";
 
 export async function getExtrasForExercise(exercise_id: number) {
   return await query("exercises_extras").where({exercise_id: exercise_id}).select("extra_key");
@@ -27,6 +28,27 @@ export async function createExercise() {
   let [new_ex] = (await query("exercises").insert({
     exercise_key: "",
   }).returning("*"));
+
+  return new_ex;
+}
+
+export async function duplicateExercise(exercise_id: number) {
+  let orig_ex = await getExerciseById(exercise_id);
+  if (!orig_ex) { return undefined; }
+
+  let [new_ex] = (await query("exercises").insert(
+    withoutProps(orig_ex, "id")
+  ).returning("*"));
+
+  let extras = await getExtrasForExercise(exercise_id);
+  await Promise.all(
+    extras.map(async e => {
+      await query("exercises_extras").insert({
+        exercise_id: new_ex.id,
+        extra_key: e.extra_key,
+      });
+    })
+  );
 
   return new_ex;
 }

@@ -38,3 +38,10 @@ export async function isCourseAdmin(user_id: number, course_id: number) {
 
   return !!result?.is_admin;
 }
+
+export async function getCourseAdmins(course_id: number) {
+  return query("users_courses").where({
+    course_id: course_id,
+    is_admin: true
+  }).select("*");
+}
