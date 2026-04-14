@@ -29,6 +29,18 @@ services:
         - http
         - db
 
+  room-server:
+    build:
+      context: ./room-server
+    restart: always
+    environment:
+      PORT: 3001
+      CORS_ORIGIN: "https://lobster.eecs.umich.edu"
+    ports:
+      - '127.0.0.1:3001:3001'
+    networks:
+      - http
+
   db:
     image: postgres:12
     restart: always

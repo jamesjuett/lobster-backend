@@ -1,0 +1,20 @@
+{
+  "name": "room-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.0",
+    "seedrandom": "^3.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/seedrandom": "^3.0.8",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0"
+  }
+}

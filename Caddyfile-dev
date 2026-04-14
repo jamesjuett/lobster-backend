@@ -8,6 +8,11 @@ tls /root/certs/localhost.pem /root/certs/localhost-key.pem
 
 route {
 
+    route /eecs498/* {
+        uri strip_prefix /eecs498
+        reverse_proxy room-server:3001
+    }
+
     route /api/* {
         reverse_proxy lobster-backend:3000
     }

@@ -29,6 +29,16 @@ services:
         - http
         - db
 
+  room-server:
+    build:
+      context: ./room-server
+    restart: always
+    environment:
+      PORT: 3001
+      CORS_ORIGIN: "*"
+    networks:
+      - http
+
   db:
     image: postgres
     restart: always
