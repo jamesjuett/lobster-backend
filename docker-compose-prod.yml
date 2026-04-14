@@ -35,7 +35,7 @@ services:
     restart: always
     environment:
       PORT: 3001
-      CORS_ORIGIN: "https://lobster.eecs.umich.edu"
+      CORS_ORIGIN: "*"
     ports:
       - '127.0.0.1:3001:3001'
     networks:
